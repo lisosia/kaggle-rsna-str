@@ -1,0 +1,32 @@
+https://www.kaggle.com/c/rsna-str-pulmonary-embolism-detection/discussion/182930
+
+RED channel / LUNG window / level=-600, width=1500
+GREEN channel / PE window / level=100, width=700
+BLUE channel / MEDIASTINAL window / level=40, width=400
+
+
+The values in CT scans tend to range from -1000 to 3000; we are used to 8-bit images with pixel values ranging from 0 to 255. Radiologists use a technique called windowing to visualize CT scans. Different types of tissues are better evaluated using different windows. Windows are defined by 2 numbers: window width and window level.
+
+Please remember that cv2.imread by default loads images in BGR so if you are using that function make sure you're not confusing the red and blue channels. The PE specific and mediastinal windows will be most useful for evaluating whether there is blood clot. However, the lung window can show abnormalities in the lungs which may be suggestive of a clot, so I included it as well. Feel free to experiment with any single window or combination of windows.
+
+def window(img, WL=50, WW=350):
+    upper, lower = WL+WW//2, WL-WW//2
+    X = np.clip(img.copy(), lower, upper)
+    X = X - np.min(X)
+    X = X / np.max(X)
+    X = (X*255.0).astype('uint8')
+    return X
+
+def load_dicom_array(f):
+    dicom_files = glob.glob(osp.join(f, '*.dcm'))
+    dicoms = [pydicom.dcmread(d) for d in dicom_files]
+    M = float(dicoms[0].RescaleSlope)
+    B = float(dicoms[0].RescaleIntercept)
+    # Assume all images are axial
+    z_pos = [float(d.ImagePositionPatient[-1]) for d in dicoms]
+    dicoms = np.asarray([d.pixel_array for d in dicoms])
+    dicoms = dicoms[np.argsort(z_pos)]
+    dicoms = dicoms * M
+    dicoms = dicoms + B
+    return dicoms, np.asarray(dicom_files)[np.argsort(z_pos)]
+
