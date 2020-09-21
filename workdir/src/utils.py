@@ -64,6 +64,43 @@ def load_config(path: str):
     return config
 
 
+def save_model(model, optim, detail, fold, dirname):
+    path = os.path.join(dirname, 'fold%d_ep%d.pt' % (fold, detail['epoch']))
+    torch.save({
+        'model': model.state_dict(),
+        'optim': optim.state_dict(),
+        'detail': detail,
+    }, path)
+    print('saved model to %s' % path)
+
+
+def load_model(path, model, optim=None):
+
+    # remap everthing onto CPU 
+    state = torch.load(str(path), map_location=lambda storage, location: storage)
+
+    model.load_state_dict(state['model'])
+    if optim:
+        print('loading optim too')
+        optim.load_state_dict(state['optim'])
+    else:
+        print('not loading optim')
+
+    model.cuda()
+
+    detail = state['detail']
+    print('loaded model from %s' % path)
+
+    return detail
+
+
+def get_lr(optim):
+    if optim:
+        return optim.param_groups[0]['lr']
+    else:
+        return 0
+
+
 def get_logger(out_file=None):
     logger = logging.getLogger()
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")

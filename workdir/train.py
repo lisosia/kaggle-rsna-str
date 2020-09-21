@@ -1,82 +1,221 @@
-import src.callbacks as clb
+#!/usr/bin/env python3
+
+import argparse
+from pathlib import Path
+import sys
+import time
+
+import numpy as np
+import pandas as pd
+import torch
+import torch.optim
+from torch.utils.data import DataLoader
+from apex import amp
+# from catalyst.dl import SupervisedRunner
+
+# import src.callbacks as clb
 import src.configuration as C
 from src.models import get_img_model
 import src.utils as utils
-
-from catalyst.dl import SupervisedRunner
-
-from pathlib import Path
-import pandas as pd
+from src.utils import get_logger
+from src.criterion import ImgLoss
+from src.datasets import RsnaDataset
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", "-c", required=True, help="Config file path")
-    parser.add_argument("--fold", type=int, nargs="+", default=0, help="Config file path")
+    parser.add_argument("--fold", type=int, nargs="+", default=0, help="Fold")
+    parser.add_argument("--apex", action="store_true", help="Enable apex (opt_level is O1: mixed precision)")
     return parser.parse_args()
 
-if __name__ == "__main__":
+EXP_ID = "001_base_tune"
+SEED = 42
+DEVICE = "cuda"
+
+output_dir = Path("./output") / EXP_ID
+output_dir.mkdir(exist_ok=True, parents=True)
+_logger = get_logger(output_dir / "output.log")
+def log(msg): _logger.info(msg)
+def log_w(msg): _logger.warn(msg)
+
+
+def main():
     args = get_args()
     config = utils.load_config(args.config)
+    # copy args to config
+    config["fold"] = args.fold
+    config["apex"] = args.apex
 
-    global_params = config["globals"]
+    utils.set_seed(SEED)
+    device = torch.device(DEVICE)
 
-    output_dir = Path(global_params["output_dir"])
-    output_dir.mkdir(exist_ok=True, parents=True)
-    logger = utils.get_logger(output_dir / "output.log")
+    log(f"Fold {args.fold}")
 
-    utils.set_seed(global_params["seed"])
-    device = torch.device(global_params["device"])
+    # loaders = {
+    #     phase: C.get_loader(df_, datadir, config, phase)
+    #     for df_, phase in zip([trn_df, val_df], ["train", "valid"])
+    # }
 
-    df, datadir = C.get_metadata(config)
+    model = get_img_model(config).to(device)
+    if False:  # resumeMultiStepLR
+        check_path = "output/057_linpool_20s_aug2_normfix/fold0/bak/train.9_full.pth"
+        warn("Load from checkpoint")
+        checkpoint = torch.load(check_path)
+        model.load_state_dict(checkpoint["model_state_dict"])
 
-    for i in range(5):
-        if i not in global_params["folds"]:
-            continue
-        logger.info("=" * 20)
-        logger.info(f"Fold {i}")
-        logger.info("=" * 20)
-        if "task" not in global_params.keys() or global_params["task"] != "nocall":
-            # trn_df = df.loc[trn_idx, :].reset_index(drop=True)
-            # val_df = df.loc[val_idx, :].reset_index(drop=True)
-            trn_df = df[df.fold!=i].reset_index(drop=True)
-            val_df = df[df.fold==i].reset_index(drop=True)
+    log(f"Model type: {model.__class__.__name__}")
+    train(config, model)
 
-            loaders = {
-                phase: C.get_loader(df_, datadir, config, phase)
-                for df_, phase in zip([trn_df, val_df], ["train", "valid"])
-            }
-        else:
-            loaders = C.get_loaders_nocall(config)
+    # runner = SupervisedRunner(
+    #     device=device,
+    #     #input_key=global_params["input_key"],
+    #     #input_target_key=global_params["input_target_key"])
+    # runner.train(
+    #     fp16=None,
+    #     model=model,
+    #     criterion=criterion,
+    #     loaders=loaders,
+    #     optimizer=optimizer,
+    #     scheduler=scheduler,
+    #     num_epochs=global_params["num_epochs"],
+    #     verbose=True,
+    #     logdir=output_dir / f"fold{i}",
+    #     callbacks=callbacks,
+    #     main_metric=global_params["main_metric"],
+    #     minimize_metric=global_params["minimize_metric"])
 
-        model = get_img_model(config).to(device)
-        criterion = C.get_criterion(config).to(device)
-        optimizer = C.get_optimizer(model, config)
-        scheduler = C.get_scheduler(optimizer, config)
-        callbacks = clb.get_callbacks(config)
+def train(cfg, model):
+    criterion = ImgLoss()
+    optim = torch.optim.Adam(model.parameters(), lr=1e-3 * 0.5)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[5], gamma=0.5)
+    # callbacks = clb.get_callbacks(config)
+    best = {
+        'loss': float('inf'),
+        'score': 0.0,
+        'epoch': -1,
+    }
+    if "resume_from" in cfg.keys():
+        detail = utils.load_model(cfg["resume_from"], model, optim=optim)
+        best.update({
+            'loss': detail['loss'],
+            'score': detail['score'],
+            'epoch': detail['epoch'],
+        })
+    for param_group in optim.param_groups:
+        param_group['lr'] = 1e-3 * 0.5
+    log(f"initial lr {utils.get_lr(optim)}")
 
-        if True:  # resume
-            import torch
-            logger.warn("Load from checkpoint")
-            # checkpoint = torch.load("output/007_ResNet18_Simple_InitialSeg/fold0/checkpoints/train.19_full.pth")
-            checkpoint = torch.load("output/057_linpool_20s_aug2_normfix/fold0/bak/train.9_full.pth")
-            model.load_state_dict(checkpoint["model_state_dict"])
+    dataset_train = RsnaDataset(cfg["fold"], "train")
+    dataset_valid = RsnaDataset(cfg["fold"], "valid")
+    loader_train = DataLoader(dataset_train, batch_size=56, shuffle=True, pin_memory=True)
+    loader_valid = DataLoader(dataset_valid, batch_size=96, shuffle=False, pin_memory=True)
 
-        logger.info(f"Model type: {model.__class__.__name__}")
+    log('train data: loaded %d records' % len(loader_train.dataset))
+    log('valid data: loaded %d records' % len(loader_valid.dataset))
 
-        runner = SupervisedRunner(
-            device=device,
-            #input_key=global_params["input_key"],
-            #input_target_key=global_params["input_target_key"])
-        runner.train(
-            fp16=None,
-            model=model,
-            criterion=criterion,
-            loaders=loaders,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            num_epochs=global_params["num_epochs"],
-            verbose=True,
-            logdir=output_dir / f"fold{i}",
-            callbacks=callbacks,
-            main_metric=global_params["main_metric"],
-            minimize_metric=global_params["minimize_metric"])
+    log('apex %s' % cfg["apex"])
+    if cfg["apex"]:
+        amp.initialize(model, optim, opt_level='O1')
+
+    for epoch in range(best['epoch']+1, cfg["epoch"]):
+
+        log(f'\n----- epoch {epoch} -----')
+
+        run_nn(cfg, 'train', model, loader_train, criterion=criterion, optim=optim, apex=cfg["apex"])
+
+        with torch.no_grad():
+            val = run_nn(cfg, 'valid', model, loader_valid, criterion=criterion)
+
+        detail = {
+            'score': val['score'],
+            'loss': val['loss'],
+            'epoch': epoch,
+        }
+        if val['loss'] <= best['loss']:
+            best.update(detail)
+
+        utils.save_model(model, optim, detail, cfg["fold"], output_dir)
+
+        log('[best] ep:%d loss:%.4f score:%.4f' % (best['epoch'], best['loss'], best['score']))
+            
+        #scheduler.step(val['loss']) # reducelronplateau
+        scheduler.step()
+
+def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None, apex=None):
+    if mode in ['train']:
+        model.train()
+    elif mode in ['valid', 'test']:
+        model.eval()
+    else:
+        raise RuntimeError('Unexpected mode %s' % mode)
+
+    t1 = time.time()
+    losses = []
+    ids_all = []
+    targets_all = []
+    outputs_all = []
+
+    for i, (inputs, targets, ids) in enumerate(loader):
+
+        batch_size = len(inputs)
+
+        inputs = inputs.cuda()
+        for k in targets.keys():
+            targets[k] = targets[k].cuda()
+        outputs = model(inputs)
+
+        if mode in ['train', 'valid']:
+            loss = criterion(outputs, targets)
+            with torch.no_grad():
+                losses.append(loss.item())
+
+        if mode in ['train']:
+            if apex:
+                with amp.scale_loss(loss, optim) as scaled_loss:
+                    scaled_loss.backward()
+            else:
+                loss.backward() # accumulate loss
+            if (i+1) % cfg["n_grad_acc"] == 0:
+                optim.step() # update
+                optim.zero_grad() # flush
+            
+        with torch.no_grad():
+            ids_all.extend(ids)
+            targets_all.extend(targets["pe_present_on_image"].cpu().numpy())
+            outputs_all.extend(torch.sigmoid(outputs["pe_present_on_image"]).cpu().numpy())
+            #outputs_all.append(torch.softmax(outputs, dim=1).cpu().numpy())
+
+        elapsed = int(time.time() - t1)
+        eta = int(elapsed / (i+1) * (len(loader)-(i+1)))
+        progress = f'\r[{mode}] {i+1}/{len(loader)} {elapsed}(s) eta:{eta}(s) loss:{(np.sum(losses)/(i+1)):.6f} loss200:{(np.sum(losses[-200:])/(min(i+1,200))):.6f} lr:{utils.get_lr(optim):.2e}'
+        print(progress, end='')
+        sys.stdout.flush()
+
+    result = {
+        'ids': ids_all,
+        'targets': np.array(targets_all),
+        'outputs': np.array(outputs_all),
+        'loss': np.sum(losses) / (i+1),
+    }
+
+    if mode in ['train', 'valid']:
+        result.update(calc_acc(result['targets'], result['outputs']))
+        # result.update(calc_auc(result['targets'], result['outputs']))
+        # result.update(calc_logloss(result['targets'], result['outputs']))
+        result['score'] = result['acc']
+
+        # log(progress + ' auc:%.4f micro:%.4f macro:%.4f' % (result['auc'], result['auc_micro'], result['auc_macro']))
+        log(progress + ' acc:%.4f' % (result['acc']))
+        log('ave_loss:%.6f' % (result['loss']))
+    else:
+        log('')
+
+    return result
+
+def calc_acc(targets, outputs):
+    cor = np.sum(targets == np.round(outputs))
+    return {"acc": cor / float(len(targets))}
+
+
+if __name__ == "__main__":
+    main()

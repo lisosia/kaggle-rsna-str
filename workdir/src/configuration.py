@@ -5,12 +5,12 @@ import torch.optim as optim
 import torch.utils.data as data
 from sklearn import model_selection as sms
 
-import src.dataset as datasets
+import src.datasets as datasets
 
 from pathlib import Path
 import glob
 
-from src.criterion import ResNetLoss  # noqa
+from src.criterion import ImgLoss  # noqa
 # from src.transforms import *
 
 

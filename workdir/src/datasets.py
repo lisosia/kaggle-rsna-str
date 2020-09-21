@@ -1,24 +1,27 @@
+import glob
 from pathlib import Path
 import cv2
 import numpy as np
 import pandas as pd
 import torch.utils.data as data
 import albumentations as alb
+import pydicom
+from scipy.ndimage.interpolation import zoom
 
 DATADIR = Path("/kaggle/input/rsna-str-pulmonary-embolism-detection/")
 
 _EXAM_TYPES = ["negative", "indeterminate", "positive"]
 def _encode_exam_type(row): return _EXAM_TYPES.index(row["exam_type"])
 def _decode_exam_type(idx): return _EXAM_TYPES[idx]
-_PE_TYPES = ["chronic", "acute_chronic", "acute"]
+_PE_TYPES = ["chronic", "acute_and_chronic", "acute"]
 def _encode_pe_type(row): return _PE_TYPES.index(row["pe_type"])
 def _decode_pe_type(idx): return _PE_TYPES[idx]
 
-def rawlabel_to_label(row):
+def rawlabel_to_label(row) -> dict:
     return dict({
         "exam_type": _encode_exam_type(row),
         "pe_present_on_image": row["pe_present_on_image"],  # can be is only when exam_type positive
-        "pe_type": _encode_pe_type(row),                    # valid only when exam_type=True and pe_present_on_image
+        # "pe_type": _encode_pe_type(row),                    # valid only when exam_type=True and pe_present_on_image
         "rv_lv_ratio_gte_1": row["rv_lv_ratio_gte_1"],      # valid only when exam_type=True and pe_present_on_image
         "rightsided_pe": row["rightsided_pe"],  # valid only when exam_type=True and pe_present_on_image, not-exclusive
         "leftsided_pe": row["leftsided_pe"],    # valid only when exam_type=True and pe_present_on_image, not-exclusive
@@ -36,15 +39,16 @@ class RsnaDataset(data.Dataset):
         self.phase = phase
         self.datafir = DATADIR
         # prepare df
-        df_train = pd.read_csv(DATADIR / "train.csv")
+        df = pd.read_csv(DATADIR / "train.csv")
         df_fold = pd.read_csv(DATADIR / "split.csv")
+        df = df.merge(df_fold, on="StudyInstanceUID")  # fold row
         df_prefix = pd.read_csv(DATADIR / "sop_to_prefix.csv")
-        df = df_train.merge(df_fold, on="StudyInstanceUID")  # fold row
-        df = df_train.merge(df_prefix, on="StudyInstanceUID")  # img_prefix row
+        df = df.merge(df_prefix, on="SOPInstanceUID")  # img_prefix row
         if phase == "train":
             self.df = df[df.fold != fold]
         elif phase == "valid":
             self.df = df[df.fold == fold]
+        # self.df = self.df.iloc[:2000]  # debug
         self.transform = get_transform_v1()
 
     def __len__(self):
@@ -52,25 +56,91 @@ class RsnaDataset(data.Dataset):
     
     def __getitem__(self, idx: int):
         sample = self.df.iloc[idx, :]
+        # label
+        label = rawlabel_to_label(sample)
+        # image
         image = get_img_jpg256(sample)
         if self.phase == "train":
             image = self.transform(image=image)["image"]
-        label = rawlabel_to_label(sample)
-        return {
-            "image": image, 
-            "label": label
-        }
+        image = (image.astype(np.float32) / 255).transpose(2,0,1)
+
+        return image, label, idx
 
 
 def get_img_jpg256(r):
-    folder = DATADIR / "train-jpegs" / r["StudyInstanceUID"] / r["StudyInstanceUID"]
-    img_path = folder / r["img_prefix"] + r["SOPInstanceUID"]
-    return cv2.imread(img_path)
+    folder = DATADIR / "train-jpegs" / r["StudyInstanceUID"] / r["SeriesInstanceUID"]
+    img_path = folder / ('{:04}_'.format(r["img_prefix"]) + r["SOPInstanceUID"] + ".jpg")
+    return cv2.imread(str(img_path))
 
 def get_transform_v1():
     return alb.Compose([
         alb.RandomCrop(224, 244, p=1)
     ])
+def get_transform_valid_v1():
+    return alb.Compose([alb.CenterCrop(224, 244, p=1)])
+
+class RsnaDatasetTest(data.Dataset):
+    """Test Time Dataset. for now, image level dataset"""
+    def __init__(self, df):
+        """df: one sop only"""
+        self.df = df
+        self.images, self.sop_arr = get_sorted_hu(df)
+        self.transform = get_transform_valid_v1()
+        
+    def __len__(self):
+        return len(self.df)
+    
+    def __getitem__(self, idx: int):
+        # image
+        image = self.images[idx]
+        image = hu_to_3wins(image)
+        image = self.transform(image=image)["image"]
+        image = (image.astype(np.float32) / 255).transpose(2,0,1)
+
+        return image, self.sop_arr[idx]
+
+def hu_to_3wins(image):
+    # 'jpg256' dataset is convert by this function
+    # Windows from https://pubs.rsna.org/doi/pdf/10.1148/rg.245045008
+    MAX_LENGTH = 256.
+    image_lung = np.expand_dims(hu_to_windows(image, WL=-600, WW=1500), axis=3)
+    image_mediastinal = np.expand_dims(hu_to_windows(image, WL=40, WW=400), axis=3)
+    image_pe_specific = np.expand_dims(hu_to_windows(image, WL=100, WW=700), axis=3)
+    image = np.concatenate([image_mediastinal, image_pe_specific, image_lung], axis=3)
+    rat = MAX_LENGTH / np.max(image.shape[1:])
+    image = zoom(image, [1.,rat,rat,1.], prefilter=False, order=1)
+    return image
+
+def hu_to_windows(img, WL=50, WW=350):
+    upper, lower = WL+WW//2, WL-WW//2
+    X = np.clip(img.copy(), lower, upper)
+    X = X - np.min(X)
+    X = X / np.max(X)
+    X = (X*255.0).astype('uint8')
+    return X
+
+def get_sorted_hu(df):
+    d = '../input/rsna-str-pulmonary-embolism-detection/test/' + df.StudyInstanceUID + '/' + df.SeriesInstanceUID
+    dicom_files = list((d + df.SOPInstanceUID).unique())
+    hu_images, sop_arr = load_dicom_array(dicom_files)
+    return hu_images, sop_arr
+
+def load_dicom_array(dicom_files):
+    """z pos sorted dicom images and files"""
+    # dicom_files = glob.glob(os.path.join(series_dir, '*.dcm'))  # series_dir to dicom_files
+    dicoms = [pydicom.dcmread(d) for d in dicom_files]
+    M = float(dicoms[0].RescaleSlope)
+    B = float(dicoms[0].RescaleIntercept)
+    # Assume all images are axial
+    z_pos = [float(d.ImagePositionPatient[-1]) for d in dicoms]
+    dicoms = np.asarray([d.pixel_array for d in dicoms])
+    dicoms = dicoms[np.argsort(z_pos)]
+    dicoms = dicoms * M
+    dicoms = dicoms + B
+    # sorted_dicom_files = np.asarray(dicom_files)[np.argsort(z_pos)]
+    sorted_sop = np.asarray([os.path.basename(f)[:-4] for f in dicom_files])[np.argsort(z_pos)]
+    return dicoms, sorted_sop
+
 
 # Split CSV
 def split_stratified(outpath):
@@ -112,6 +182,7 @@ def split_stratified(outpath):
     df_study[["StudyInstanceUID", "exam_type", "fold"]].to_csv(outpath, index=False)
 
 
+# test
 if __name__ == "__main__":
     outpath = DATADIR / "split.csv"
     split_stratified(outpath)
