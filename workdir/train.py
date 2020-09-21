@@ -2,6 +2,7 @@
 
 import argparse
 from pathlib import Path
+import os
 import sys
 import time
 
@@ -21,22 +22,24 @@ from src.datasets import RsnaDataset
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", "-c", required=True, help="Config file path")
+    parser.add_argument("config", help="Config file path")
+    parser.add_argument("--fold", type=int, default=0, help="fold")
+    parser.add_argument("--apex", action='store_true', default=False, help="apex")
     return parser.parse_args()
+args = get_args()
 
-EXP_ID = "001_base_tune"
+EXP_ID = os.path.splitext(os.path.basename(args.config))[0]
 SEED = 42
 DEVICE = "cuda"
 
 output_dir = Path("./output") / EXP_ID
 output_dir.mkdir(exist_ok=True, parents=True)
-_logger = get_logger(output_dir / "output.log")
+_logger = get_logger(output_dir / f"fold{args.fold}_output.log")
 def log(msg): _logger.info(msg)
 def log_w(msg): _logger.warn(msg)
-
+log(f'EXP {EXP_ID} start')
 
 def main():
-    args = get_args()
     config = utils.load_config(args.config)
     # copy args to config
     config["fold"] = args.fold
@@ -55,7 +58,7 @@ def main():
 
 def train(cfg, model):
     criterion = ImgLoss()
-    optim = torch.optim.Adam(model.parameters(), lr=1e-3 * 0.5)
+    optim = torch.optim.Adam(model.parameters(), lr=1e-3)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[5], gamma=0.5)
     best = {
         'loss': float('inf'),

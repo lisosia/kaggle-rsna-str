@@ -8,6 +8,7 @@ import torch.utils.data as data
 import albumentations as alb
 import pydicom
 from scipy.ndimage.interpolation import zoom
+from src.utils import timer
 
 DATADIR = Path("/kaggle/input/rsna-str-pulmonary-embolism-detection/")
 
@@ -103,6 +104,31 @@ class RsnaDatasetTest(data.Dataset):
         image = (image.astype(np.float32) / 255).transpose(2,0,1)
 
         return image, {}, self.sop_arr[idx]  # image, dummy_label_dict, id
+
+
+class RsnaDatasetTest2(data.Dataset):
+    """Test Time Dataset. for now, image level dataset"""
+    def __init__(self, df=None):
+        """df: one sop only"""
+        self.df_all = df if df  else pd.read_csv(DATADIR / "test.csv")
+        self.studies = self.df_all.StudyInstanceUID.unique()
+        self.transform = get_transform_valid_v1()
+
+    def __len__(self):
+        return len(self.studies)
+    
+    def _trans(self, img):
+        return ((self.transform(image=hu_to_3wins(img))["image"]).astype(np.float32) / 255.).transpose(2,0,1)
+
+    def __getitem__(self, idx: int):
+        study_id = self.studies[idx]
+        df = self.df_all[self.df_all.StudyInstanceUID == study_id]
+        images, sop_arr = get_sorted_hu(df)
+        images = [self._trans(img) for img in images]
+        images = np.array(images)
+
+        return images, study_id, sop_arr
+
 
 def hu_to_3wins(image):
     # 'jpg256' dataset is convert by this function
