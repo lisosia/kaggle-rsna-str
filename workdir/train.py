@@ -11,9 +11,7 @@ import torch
 import torch.optim
 from torch.utils.data import DataLoader
 from apex import amp
-# from catalyst.dl import SupervisedRunner
 
-# import src.callbacks as clb
 import src.configuration as C
 from src.models import get_img_model
 import src.utils as utils
@@ -24,8 +22,6 @@ from src.datasets import RsnaDataset
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", "-c", required=True, help="Config file path")
-    parser.add_argument("--fold", type=int, nargs="+", default=0, help="Fold")
-    parser.add_argument("--apex", action="store_true", help="Enable apex (opt_level is O1: mixed precision)")
     return parser.parse_args()
 
 EXP_ID = "001_base_tune"
@@ -51,44 +47,16 @@ def main():
 
     log(f"Fold {args.fold}")
 
-    # loaders = {
-    #     phase: C.get_loader(df_, datadir, config, phase)
-    #     for df_, phase in zip([trn_df, val_df], ["train", "valid"])
-    # }
-
     model = get_img_model(config).to(device)
-    if False:  # resumeMultiStepLR
-        check_path = "output/057_linpool_20s_aug2_normfix/fold0/bak/train.9_full.pth"
-        warn("Load from checkpoint")
-        checkpoint = torch.load(check_path)
-        model.load_state_dict(checkpoint["model_state_dict"])
 
     log(f"Model type: {model.__class__.__name__}")
     train(config, model)
 
-    # runner = SupervisedRunner(
-    #     device=device,
-    #     #input_key=global_params["input_key"],
-    #     #input_target_key=global_params["input_target_key"])
-    # runner.train(
-    #     fp16=None,
-    #     model=model,
-    #     criterion=criterion,
-    #     loaders=loaders,
-    #     optimizer=optimizer,
-    #     scheduler=scheduler,
-    #     num_epochs=global_params["num_epochs"],
-    #     verbose=True,
-    #     logdir=output_dir / f"fold{i}",
-    #     callbacks=callbacks,
-    #     main_metric=global_params["main_metric"],
-    #     minimize_metric=global_params["minimize_metric"])
 
 def train(cfg, model):
     criterion = ImgLoss()
     optim = torch.optim.Adam(model.parameters(), lr=1e-3 * 0.5)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[5], gamma=0.5)
-    # callbacks = clb.get_callbacks(config)
     best = {
         'loss': float('inf'),
         'score': 0.0,
@@ -101,9 +69,9 @@ def train(cfg, model):
             'score': detail['score'],
             'epoch': detail['epoch'],
         })
-    for param_group in optim.param_groups:
-        param_group['lr'] = 1e-3 * 0.5
-    log(f"initial lr {utils.get_lr(optim)}")
+    # for param_group in optim.param_groups:
+    #     param_group['lr'] = 1e-3 * 0.5
+    # log(f"initial lr {utils.get_lr(optim)}")
 
     dataset_train = RsnaDataset(cfg["fold"], "train")
     dataset_valid = RsnaDataset(cfg["fold"], "valid")
@@ -181,13 +149,14 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
             
         with torch.no_grad():
             ids_all.extend(ids)
-            targets_all.extend(targets["pe_present_on_image"].cpu().numpy())
+            if mode != 'test':
+                targets_all.extend(targets["pe_present_on_image"].cpu().numpy())
             outputs_all.extend(torch.sigmoid(outputs["pe_present_on_image"]).cpu().numpy())
             #outputs_all.append(torch.softmax(outputs, dim=1).cpu().numpy())
 
         elapsed = int(time.time() - t1)
         eta = int(elapsed / (i+1) * (len(loader)-(i+1)))
-        progress = f'\r[{mode}] {i+1}/{len(loader)} {elapsed}(s) eta:{eta}(s) loss:{(np.sum(losses)/(i+1)):.6f} loss200:{(np.sum(losses[-200:])/(min(i+1,200))):.6f} lr:{utils.get_lr(optim):.2e}'
+        progress = f'\r[{mode}] {i+1}/{len(loader)} {elapsed}(s) eta:{eta}(s) loss:{(np.sum(losses)/(i+1)):.6f} loss200:{(np.sum(losses[-200:])/(min(i+1,200))):.6f} lr:{utils.get_lr(optim):.2e} '
         print(progress, end='')
         sys.stdout.flush()
 
@@ -200,8 +169,6 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
 
     if mode in ['train', 'valid']:
         result.update(calc_acc(result['targets'], result['outputs']))
-        # result.update(calc_auc(result['targets'], result['outputs']))
-        # result.update(calc_logloss(result['targets'], result['outputs']))
         result['score'] = result['acc']
 
         # log(progress + ' auc:%.4f micro:%.4f macro:%.4f' % (result['auc'], result['auc_micro'], result['auc_macro']))
@@ -212,6 +179,7 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
 
     return result
 
+# metric functions. return {"metric_name": val}
 def calc_acc(targets, outputs):
     cor = np.sum(targets == np.round(outputs))
     return {"acc": cor / float(len(targets))}

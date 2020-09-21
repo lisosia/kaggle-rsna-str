@@ -1,4 +1,5 @@
 import glob
+import os
 from pathlib import Path
 import cv2
 import numpy as np
@@ -81,15 +82,19 @@ def get_transform_valid_v1():
 
 class RsnaDatasetTest(data.Dataset):
     """Test Time Dataset. for now, image level dataset"""
-    def __init__(self, df):
+    def __init__(self, df=None):
         """df: one sop only"""
-        self.df = df
-        self.images, self.sop_arr = get_sorted_hu(df)
+        self.df_all = df if df  else pd.read_csv(DATADIR / "test.csv")
         self.transform = get_transform_valid_v1()
         
     def __len__(self):
         return len(self.df)
     
+    def set_StudyInstanceUID(self, study_id):
+        self.df = self.df_all[self.df_all.StudyInstanceUID == study_id]
+        assert len(self.df) > 0
+        self.images, self.sop_arr = get_sorted_hu(self.df)
+
     def __getitem__(self, idx: int):
         # image
         image = self.images[idx]
@@ -97,18 +102,20 @@ class RsnaDatasetTest(data.Dataset):
         image = self.transform(image=image)["image"]
         image = (image.astype(np.float32) / 255).transpose(2,0,1)
 
-        return image, self.sop_arr[idx]
+        return image, {}, self.sop_arr[idx]  # image, dummy_label_dict, id
 
 def hu_to_3wins(image):
     # 'jpg256' dataset is convert by this function
     # Windows from https://pubs.rsna.org/doi/pdf/10.1148/rg.245045008
     MAX_LENGTH = 256.
-    image_lung = np.expand_dims(hu_to_windows(image, WL=-600, WW=1500), axis=3)
-    image_mediastinal = np.expand_dims(hu_to_windows(image, WL=40, WW=400), axis=3)
-    image_pe_specific = np.expand_dims(hu_to_windows(image, WL=100, WW=700), axis=3)
-    image = np.concatenate([image_mediastinal, image_pe_specific, image_lung], axis=3)
+    image_lung = np.expand_dims(hu_to_windows(image, WL=-600, WW=1500), axis=-1)
+    image_mediastinal = np.expand_dims(hu_to_windows(image, WL=40, WW=400), axis=-1)
+    image_pe_specific = np.expand_dims(hu_to_windows(image, WL=100, WW=700), axis=-1)
+    image = np.concatenate([image_mediastinal, image_pe_specific, image_lung], axis=-1)
+    # import pdb; pdb.set_trace()
     rat = MAX_LENGTH / np.max(image.shape[1:])
-    image = zoom(image, [1.,rat,rat,1.], prefilter=False, order=1)
+    image = zoom(image, [rat,rat,1.], prefilter=False, order=1)
+    # image = zoom(image, [1.,rat,rat,1.], prefilter=False, order=1)
     return image
 
 def hu_to_windows(img, WL=50, WW=350):
@@ -120,8 +127,8 @@ def hu_to_windows(img, WL=50, WW=350):
     return X
 
 def get_sorted_hu(df):
-    d = '../input/rsna-str-pulmonary-embolism-detection/test/' + df.StudyInstanceUID + '/' + df.SeriesInstanceUID
-    dicom_files = list((d + df.SOPInstanceUID).unique())
+    d = '../input/rsna-str-pulmonary-embolism-detection/test/' + df.StudyInstanceUID + '/' + df.SeriesInstanceUID + '/'
+    dicom_files = list((d + df.SOPInstanceUID + '.dcm').unique())
     hu_images, sop_arr = load_dicom_array(dicom_files)
     return hu_images, sop_arr
 
