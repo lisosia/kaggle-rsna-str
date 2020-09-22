@@ -28,6 +28,7 @@ def get_args():
     # parser.add_argument("--config", "-c", required=True, help="Config file path")
     parser.add_argument("weight_path", help="weight path")
     parser.add_argument("--debug", action='store_true', help="debug")
+    parser.add_argument("--skip", action='store_true', help="skip for commit-time infer")
     return parser.parse_args()
 args = get_args()
 
@@ -84,17 +85,32 @@ def main():
     utils.set_seed(SEED)
     device = torch.device(DEVICE)
 
+    # prepare Dataframe first
+    df_test = pd.read_csv(DATADIR / "test.csv")
+    df_sub = load_sub_filled_average()
+    df_sub = df_sub.set_index('id')
+
+    # sanity check
+    for _std in df_test.StudyInstanceUID.unique():
+        assert (len(df_sub.loc[_std + '_negative_exam_for_pe']) == 1)
+    for _sop in df_test.SOPInstanceUID.unique():
+        assert (len(df_sub.loc[_sop]) == 1)
+    print("sanity check passed. df_test, df_sub prepared")
+
+    print(len(df_test))
+    if args.skip and len(df_test) == 146853:
+        print("=== Only public test is vissible. Skip inference and just submit mean-prediction!")
+        df_sub.reset_index(inplace=True)
+        df_sub.to_csv("submission.csv", index=False)
+        return
+
+
     ### model 001 : image-level pred of pe_present_on_image
     model = ImgModel(archi="efficientnet_b0", pretrained=False).to(device)
     log(f"Model type: {model.__class__.__name__}")
     result_pe = sub_2(None, model, args.weight_path)
     # result_pe = sub(None, model, args.weight_path)
     utils.save_pickle(result_pe, 'cache/001.pickle')
-
-    # df_sub = pd.read_csv(DATADIR / "sample_submission.csv")
-    df_sub = load_sub_filled_average()
-    df_sub = df_sub.set_index('id')
-    df_test = pd.read_csv(DATADIR / "test.csv")
 
     for study in df_test.StudyInstanceUID.unique():
         res = result_pe[study]

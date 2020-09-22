@@ -166,7 +166,20 @@ def load_dicom_array(dicom_files):
     B = float(dicoms[0].RescaleIntercept)
     # Assume all images are axial
     z_pos = [float(d.ImagePositionPatient[-1]) for d in dicoms]
-    dicoms = np.asarray([d.pixel_array for d in dicoms])
+
+    ### read with error check
+    dicoms_arr = []
+    for d in dicoms:
+        try:
+            img = d.pixel_array
+        except:
+            print('image error ', d)
+            img = np.zeros(shape=(512,512))
+        dicoms_arr.append(img)
+    dicoms = np.array(dicoms_arr)
+    ### read without error check
+    # dicoms = np.asarray([d.pixel_array for d in dicoms])
+
     dicoms = dicoms[np.argsort(z_pos)]
     dicoms = dicoms * M
     dicoms = dicoms + B
