@@ -11,7 +11,6 @@ import pandas as pd
 import torch
 import torch.optim
 from torch.utils.data import DataLoader
-from apex import amp
 
 import src.configuration as C
 from src.models import get_img_model
@@ -27,6 +26,8 @@ def get_args():
     parser.add_argument("--apex", action='store_true', default=False, help="apex")
     return parser.parse_args()
 args = get_args()
+if args.apex:
+    from apex import amp
 
 EXP_ID = os.path.splitext(os.path.basename(args.config))[0]
 SEED = 42

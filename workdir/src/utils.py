@@ -8,6 +8,7 @@ import time
 import numpy as np
 import torch
 import yaml
+import pickle
 
 from contextlib import contextmanager
 from typing import Union, Optional
@@ -56,6 +57,17 @@ def save_json(config: dict, save_path: Union[str, Path]):
     f = codecs.open(str(save_path), mode="w", encoding="utf-8")
     json.dump(config, f, indent=4, cls=MyEncoder, ensure_ascii=False)
     f.close()
+
+
+def save_pickle(obj, path: os.PathLike):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'wb') as f:
+        pickle.dump(obj, f)
+
+def load_pickle(path: os.PathLike):
+    with open(path, 'rb') as f:
+        obj = pickle.load(obj, f)
+    return obj
 
 
 def load_config(path: str):

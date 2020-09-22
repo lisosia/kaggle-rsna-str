@@ -11,7 +11,6 @@ import pandas as pd
 import torch
 import torch.optim
 from torch.utils.data import DataLoader
-from apex import amp
 from tqdm.auto import tqdm
 
 import src.configuration as C
@@ -21,13 +20,14 @@ from src.utils import get_logger
 from src.criterion import ImgLoss
 from src.datasets import RsnaDatasetTest, RsnaDatasetTest2
 
-from train import run_nn
+# from train import run_nn
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     # parser.add_argument("--config", "-c", required=True, help="Config file path")
     parser.add_argument("weight_path", help="weight path")
+    parser.add_argument("--debug", action='store_true', help="debug")
     return parser.parse_args()
 args = get_args()
 
@@ -84,14 +84,12 @@ def main():
     utils.set_seed(SEED)
     device = torch.device(DEVICE)
 
-    # model 001 : image-level pred of pe_present_on_image
-    model = ImgModel(archi="efficientnet_b0").to(device)
+    ### model 001 : image-level pred of pe_present_on_image
+    model = ImgModel(archi="efficientnet_b0", pretrained=False).to(device)
     log(f"Model type: {model.__class__.__name__}")
     result_pe = sub_2(None, model, args.weight_path)
     # result_pe = sub(None, model, args.weight_path)
-    cache_file = 'cache/001.pickle'
-    with open(cache_file, 'wb') as f:
-        pickle.dump(result_pe, f)
+    utils.save_pickle(result_pe, 'cache/001.pickle')
 
     # df_sub = pd.read_csv(DATADIR / "sample_submission.csv")
     df_sub = load_sub_filled_average()
@@ -104,8 +102,10 @@ def main():
         for sop, pred in zip(res["ids"], res["outputs"]):
             df_sub.loc[sop, 'label'] = pred
 
-        # fill exam_type (negative, indeterminate, positive)
-        pos_exam_prob = np.power(np.mean(res["outputs"] ** 7), 1/7)
+        ### fill exam_type (negative, indeterminate, positive)
+        # pos_exam_prob = np.power(np.mean(res["outputs"] ** 7), 1/7)
+        pos_exam_prob = np.percentile(res["outputs"], q=95)
+
         print("pos_exam_prob", pos_exam_prob, "max_pe_present_prob", np.max(res["outputs"]))
         indeterminate_prob = _MEANS['indeterminate']  # from average
         df_sub.loc[study + '_' + 'indeterminate', 'label'] = indeterminate_prob
@@ -157,6 +157,7 @@ def sub_2(cfg, model, weight_path):
             "outputs": np.array(preds),
             "ids": np.array(sop_arr),
         }
+        if args.debug: break
 
     print("per study result's keys(): ", result_all[study_id].keys())
     # import pdb; pdb.set_trace()
