@@ -21,9 +21,12 @@ from src.datasets import RsnaDataset
 
 def get_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("mode", choices=['train', 'valid'], help="train valid")
     parser.add_argument("config", help="Config file path")
     parser.add_argument("--fold", type=int, default=0, help="fold")
     parser.add_argument("--apex", action='store_true', default=False, help="apex")
+    parser.add_argument("--output", "-o", help="output path for validation")
+    parser.add_argument("--snapshot", "-s", help="snapshot weight path")
     return parser.parse_args()
 args = get_args()
 if args.apex:
@@ -43,8 +46,11 @@ log(f'EXP {EXP_ID} start')
 def main():
     config = utils.load_config(args.config)
     # copy args to config
+    config["mode"] = args.mode
     config["fold"] = args.fold
     config["apex"] = args.apex
+    config["output"] = args.output
+    config["snapshot"] = args.snapshot
 
     utils.set_seed(SEED)
     device = torch.device(DEVICE)
@@ -54,7 +60,22 @@ def main():
     model = get_img_model(config).to(device)
 
     log(f"Model type: {model.__class__.__name__}")
-    train(config, model)
+    if config["mode"] == 'train':
+        train(config, model)
+    elif config["mode"] == 'valid':
+        valid(config, model)
+
+
+def valid(cfg, model):
+    assert cfg["output"]
+    criterion = ImgLoss()
+    utils.load_model(cfg["snapshot"], model)
+    dataset_valid = RsnaDataset(cfg["fold"], "valid")
+    loader_valid = DataLoader(dataset_valid, batch_size=224, shuffle=False, pin_memory=True, num_workers=4)
+    with torch.no_grad():
+        results = run_nn(cfg, 'valid', model, loader_valid, criterion=criterion)
+    utils.save_pickle(results, cfg["output"])
+    log('saved to %s' % cfg["output"])
 
 
 def train(cfg, model):

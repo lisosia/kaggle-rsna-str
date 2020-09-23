@@ -48,10 +48,11 @@ class RsnaDataset(data.Dataset):
         df = df.merge(df_prefix, on="SOPInstanceUID")  # img_prefix row
         if phase == "train":
             self.df = df[df.fold != fold]
+            self.transform = get_transform_v1()
         elif phase == "valid":
             self.df = df[df.fold == fold]
+            self.transform = get_transform_valid_v1()
         # self.df = self.df.iloc[:2000]  # debug
-        self.transform = get_transform_v1()
 
     def __len__(self):
         return len(self.df)
@@ -66,7 +67,7 @@ class RsnaDataset(data.Dataset):
             image = self.transform(image=image)["image"]
         image = (image.astype(np.float32) / 255).transpose(2,0,1)
 
-        return image, label, idx
+        return image, label, sample.SOPInstanceUID
 
 
 def get_img_jpg256(r):

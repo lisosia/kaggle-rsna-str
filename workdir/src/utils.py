@@ -60,13 +60,15 @@ def save_json(config: dict, save_path: Union[str, Path]):
 
 
 def save_pickle(obj, path: os.PathLike):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    dirname = os.path.dirname(path)
+    if dirname != '':
+        os.makedirs(dirname, exist_ok=True)
     with open(path, 'wb') as f:
         pickle.dump(obj, f)
 
 def load_pickle(path: os.PathLike):
     with open(path, 'rb') as f:
-        obj = pickle.load(obj, f)
+        obj = pickle.load(f)
     return obj
 
 
