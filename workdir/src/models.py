@@ -50,6 +50,40 @@ class ImgModelIndAverageBaseline(nn.Module):
         }
 
 
+class ImgModelIndShallow(nn.Module):
+    """shallow model"""
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(3, 32, (3, 3))
+        self.bn1 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32, 64, (3, 3))
+        self.bn2 = nn.BatchNorm2d(64)
+        self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
+        self.conv3 = nn.Conv2d(64, 128, (3, 3))
+        self.bn3 = nn.BatchNorm2d(128)
+        self.gap = nn.AdaptiveAvgPool2d(1)
+        self.fc1 = nn.Linear(128, 256)
+        self.drop1 = nn.Dropout(p=0.3)
+        self.fc2 = nn.Linear(256, 3)
+
+    def forward(self, x):
+        batchsize = x.size(0)
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = self.pool2(x)
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = self.gap(x)
+        x = x.view(batchsize, -1)
+        x = F.relu(self.drop1(self.fc1(x)))
+        x = self.fc2(x)
+
+        return {
+            "indeterminate": x[:, 0],
+            "qa_contrast": x[:, 1],
+            "qa_motion": x[:, 2],
+        }
+
+
 # img level model
 def get_img_model(config: dict):
     return ImgModel(archi="efficientnet_b0")

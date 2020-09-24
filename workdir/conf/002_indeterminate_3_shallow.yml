@@ -1,0 +1,11 @@
+epoch: 3
+n_grad_acc: 1
+
+model:
+  class: ImgModelIndShallow
+  param: {}
+
+criterion:
+  class: ImgLossInd
+  param: {}
+

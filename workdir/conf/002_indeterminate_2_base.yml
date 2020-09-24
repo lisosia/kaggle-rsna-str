@@ -1,0 +1,11 @@
+epoch: 6
+n_grad_acc: 1
+
+model:
+  class: ImgModelIndAverageBaseline
+  param: {}
+
+criterion:
+  class: ImgLossInd
+  param: {}
+
