@@ -22,6 +22,7 @@ def _decode_pe_type(idx): return _PE_TYPES[idx]
 def rawlabel_to_label(row) -> dict:
     return dict({
         "exam_type": _encode_exam_type(row),
+            "indeterminate": row["indeterminate"],  # dup
         "pe_present_on_image": row["pe_present_on_image"],  # can be is only when exam_type positive
         # "pe_type": _encode_pe_type(row),                    # valid only when exam_type=True and pe_present_on_image
         "rv_lv_ratio_gte_1": row["rv_lv_ratio_gte_1"],      # valid only when exam_type=True and pe_present_on_image
@@ -52,7 +53,7 @@ class RsnaDataset(data.Dataset):
         elif phase == "valid":
             self.df = df[df.fold == fold]
             self.transform = get_transform_valid_v1()
-        # self.df = self.df.iloc[:2000]  # debug
+        # self.df = self.df.iloc[:20000]  # debug
 
     def __len__(self):
         return len(self.df)

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+from collections import defaultdict
 from pathlib import Path
 import os
 import sys
@@ -8,6 +9,7 @@ import time
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import f1_score, precision_recall_fscore_support
 import torch
 import torch.optim
 from torch.utils.data import DataLoader
@@ -18,6 +20,8 @@ import src.utils as utils
 from src.utils import get_logger
 from src.criterion import ImgLoss
 from src.datasets import RsnaDataset
+import src.factory as factory
+
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -57,7 +61,7 @@ def main():
 
     log(f"Fold {args.fold}")
 
-    model = get_img_model(config).to(device)
+    model = factory.get_model(config).to(device)
 
     log(f"Model type: {model.__class__.__name__}")
     if config["mode"] == 'train':
@@ -68,7 +72,7 @@ def main():
 
 def valid(cfg, model):
     assert cfg["output"]
-    criterion = ImgLoss()
+    criterion = factory.get_criterion(cfg)
     utils.load_model(cfg["snapshot"], model)
     dataset_valid = RsnaDataset(cfg["fold"], "valid")
     loader_valid = DataLoader(dataset_valid, batch_size=224, shuffle=False, pin_memory=True, num_workers=4)
@@ -79,7 +83,7 @@ def valid(cfg, model):
 
 
 def train(cfg, model):
-    criterion = ImgLoss()
+    criterion = factory.get_criterion(cfg)
     optim = torch.optim.Adam(model.parameters(), lr=1e-3)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[5], gamma=0.5)
     best = {
@@ -145,8 +149,8 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
     t1 = time.time()
     losses = []
     ids_all = []
-    targets_all = []
-    outputs_all = []
+    targets_all = defaultdict(list)
+    outputs_all = defaultdict(list)
 
     for i, (inputs, targets, ids) in enumerate(loader):
 
@@ -174,9 +178,11 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
             
         with torch.no_grad():
             ids_all.extend(ids)
-            if mode != 'test':
-                targets_all.extend(targets["pe_present_on_image"].cpu().numpy())
-            outputs_all.extend(torch.sigmoid(outputs["pe_present_on_image"]).cpu().numpy())
+            for _k in outputs.keys():  # iter over output keys
+                if mode != 'test':
+                    targets_all[_k].extend(targets[_k].cpu().numpy())
+                outputs_all[_k].extend(torch.sigmoid(outputs[_k]).cpu().numpy())
+            #outputs_all.extend(torch.sigmoid(outputs["pe_present_on_image"]).cpu().numpy())
             #outputs_all.append(torch.softmax(outputs, dim=1).cpu().numpy())
 
         elapsed = int(time.time() - t1)
@@ -187,17 +193,23 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
 
     result = {
         'ids': ids_all,
-        'targets': np.array(targets_all),
-        'outputs': np.array(outputs_all),
+        'targets': dict([(k, np.array(v)) for k, v in targets_all.items()]),
+        'outputs': dict([(k, np.array(v)) for k, v in outputs_all.items()]),
         'loss': np.sum(losses) / (i+1),
     }
 
     if mode in ['train', 'valid']:
-        result.update(calc_acc(result['targets'], result['outputs']))
-        result['score'] = result['acc']
+        # result.update(calc_acc(result['targets'], result['outputs']))
+        # result['score'] = result['acc']
+        SCORE_KEY = "acc_indeterminate"
+        SHOW_KEYS = ["acc_indeterminate", "acc_qa_contrast", "acc_qa_motion"]
+        result.update(calc_acc_ind(result['targets'], result['outputs']))
+        result.update(calc_f1_ind(result['targets'], result['outputs']))
+        result['score'] = result[SCORE_KEY]
 
         # log(progress + ' auc:%.4f micro:%.4f macro:%.4f' % (result['auc'], result['auc_micro'], result['auc_macro']))
-        log(progress + ' acc:%.4f' % (result['acc']))
+        # log(progress + ' acc:%.4f' % (result['acc']))
+        log(progress + ' '.join([k+':%.4f ' % result[k] for k in SHOW_KEYS]))
         log('ave_loss:%.6f' % (result['loss']))
     else:
         log('')
@@ -209,6 +221,21 @@ def calc_acc(targets, outputs):
     cor = np.sum(targets == np.round(outputs))
     return {"acc": cor / float(len(targets))}
 
+def calc_acc_ind(targets, outputs):
+    ret = {}
+    for k in ["indeterminate", "qa_contrast", "qa_motion"]:
+        cor = np.sum(targets[k] == np.round(outputs[k]))
+        ret["acc_" + k] = cor / float(len(targets[k]))
+    return ret
+def calc_f1_ind(targets, outputs):
+    ret = {}
+    for k in ["indeterminate", "qa_contrast", "qa_motion"]:
+        pre, rec, f1, _ = precision_recall_fscore_support(targets[k], np.round(outputs[k]), average='binary')
+        ret["pre_" + k] = pre
+        ret["rec_" + k] = rec
+        ret["f1_" + k] = f1
+    print(ret)
+    return ret
 
 if __name__ == "__main__":
     main()
