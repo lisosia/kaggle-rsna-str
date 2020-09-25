@@ -19,7 +19,7 @@ from src.models import get_img_model
 import src.utils as utils
 from src.utils import get_logger
 from src.criterion import ImgLoss
-from src.datasets import RsnaDataset
+from src.datasets import RsnaDataset, RsnaDataset3D
 import src.factory as factory
 
 
@@ -74,8 +74,8 @@ def valid(cfg, model):
     assert cfg["output"]
     criterion = factory.get_criterion(cfg)
     utils.load_model(cfg["snapshot"], model)
-    dataset_valid = RsnaDataset(cfg["fold"], "valid")
-    loader_valid = DataLoader(dataset_valid, batch_size=224, shuffle=False, pin_memory=True, num_workers=4)
+    dataset_valid = RsnaDataset3D(cfg["fold"], "valid")
+    loader_valid = DataLoader(dataset_valid, batch_size=4, shuffle=False, pin_memory=True, num_workers=4)  #bs224
     with torch.no_grad():
         results = run_nn(cfg, 'valid', model, loader_valid, criterion=criterion)
     utils.save_pickle(results, cfg["output"])
@@ -102,10 +102,10 @@ def train(cfg, model):
     #     param_group['lr'] = 1e-3 * 0.5
     # log(f"initial lr {utils.get_lr(optim)}")
 
-    dataset_train = RsnaDataset(cfg["fold"], "train")
-    dataset_valid = RsnaDataset(cfg["fold"], "valid")
-    loader_train = DataLoader(dataset_train, batch_size=56, shuffle=True, pin_memory=True)
-    loader_valid = DataLoader(dataset_valid, batch_size=96, shuffle=False, pin_memory=True)
+    dataset_train = RsnaDataset3D(cfg["fold"], "train")
+    dataset_valid = RsnaDataset3D(cfg["fold"], "valid")
+    loader_train = DataLoader(dataset_train, batch_size=2, shuffle=True, pin_memory=True)  # 56
+    loader_valid = DataLoader(dataset_valid, batch_size=3, shuffle=False, pin_memory=True)  # 96
 
     log('train data: loaded %d records' % len(loader_train.dataset))
     log('valid data: loaded %d records' % len(loader_valid.dataset))

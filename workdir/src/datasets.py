@@ -9,6 +9,7 @@ import albumentations as alb
 import pydicom
 from scipy.ndimage.interpolation import zoom
 from src.utils import timer
+import src.transforms as transforms
 
 DATADIR = Path("/kaggle/input/rsna-str-pulmonary-embolism-detection/")
 
@@ -24,6 +25,20 @@ def rawlabel_to_label(row) -> dict:
         "exam_type": _encode_exam_type(row),
             "indeterminate": row["indeterminate"],  # dup
         "pe_present_on_image": row["pe_present_on_image"],  # can be is only when exam_type positive
+        # "pe_type": _encode_pe_type(row),                    # valid only when exam_type=True and pe_present_on_image
+        "rv_lv_ratio_gte_1": row["rv_lv_ratio_gte_1"],      # valid only when exam_type=True and pe_present_on_image
+        "rightsided_pe": row["rightsided_pe"],  # valid only when exam_type=True and pe_present_on_image, not-exclusive
+        "leftsided_pe": row["leftsided_pe"],    # valid only when exam_type=True and pe_present_on_image, not-exclusive
+        "central_pe": row["central_pe"],        # valid only when exam_type=True and pe_present_on_image, not-exclusive
+        "qa_motion": row["qa_motion"],     # could be 1 when and only when indeterminate
+        "qa_contrast": row["qa_contrast"], # could be 1 when and only when indeterminate
+        "flow_artifact": row["flow_artifact"],  # [optional] always valid
+        "true_filling_defect_not_pe": row["true_filling_defect_not_pe"],  # [optional] valid when exam_type positive or negative
+    })
+def rawlabel_to_label_study_level(row) -> dict:
+    return dict({
+        "exam_type": _encode_exam_type(row),
+            "indeterminate": row["indeterminate"],  # dup
         # "pe_type": _encode_pe_type(row),                    # valid only when exam_type=True and pe_present_on_image
         "rv_lv_ratio_gte_1": row["rv_lv_ratio_gte_1"],      # valid only when exam_type=True and pe_present_on_image
         "rightsided_pe": row["rightsided_pe"],  # valid only when exam_type=True and pe_present_on_image, not-exclusive
@@ -71,6 +86,46 @@ class RsnaDataset(data.Dataset):
         return image, label, sample.SOPInstanceUID
 
 
+class RsnaDataset3D(data.Dataset):
+    """Study(Series) Level Dataset"""
+    def __init__(self, fold, phase):
+        assert phase in ["train", "valid"]
+        self.phase = phase
+        self.datafir = DATADIR
+        # prepare df
+        df = pd.read_csv(DATADIR / "train.csv")
+        df_fold = pd.read_csv(DATADIR / "split.csv")
+        df = df.merge(df_fold, on="StudyInstanceUID")  # fold row
+        df_prefix = pd.read_csv(DATADIR / "sop_to_prefix.csv")
+        df = df.merge(df_prefix, on="SOPInstanceUID")  # img_prefix row
+        if phase == "train":
+            self.df = df[df.fold != fold]
+            self.transform = transforms.trans_ind_3d
+        elif phase == "valid":
+            self.df = df[df.fold == fold]
+            self.transform = transforms.trans_ind_3d_valid
+        self.studies = self.df.StudyInstanceUID.unique()
+        # self.df = self.df.iloc[:2000]  # debug
+
+    def __len__(self):
+        return len(self.studies)
+    
+    def __getitem__(self, idx: int):
+        study_id = self.studies[idx]
+        df = self.df[self.df.StudyInstanceUID == study_id]
+        # label
+        label = rawlabel_to_label_study_level(df.iloc[0])
+        # 3d image
+        images = get_img_jpg256_all(df)
+        images = np.array([img[:,:,1] for img in images])
+        images = images.astype(np.float32) / 255.  # pick PE window
+        # trans
+        img_3d = self.transform(images)
+        img_3d = np.expand_dims(np.array(img_3d), axis=0)  # (1,D,H,W)
+        # import pdb; pdb.set_trace()
+        return img_3d, label, study_id
+
+
 def get_img_jpg256(r):
     folder = DATADIR / "train-jpegs" / r["StudyInstanceUID"] / r["SeriesInstanceUID"]
     img_path = folder / ('{:04}_'.format(r["img_prefix"]) + r["SOPInstanceUID"] + ".jpg")
@@ -82,6 +137,15 @@ def get_transform_v1():
     ])
 def get_transform_valid_v1():
     return alb.Compose([alb.CenterCrop(224, 244, p=1)])
+
+def get_img_jpg256_all(df):
+    imgs = []
+    for index, r in df.iterrows():
+        folder = DATADIR / "train-jpegs" / r["StudyInstanceUID"] / r["SeriesInstanceUID"]
+        img_path = folder / ('{:04}_'.format(r["img_prefix"]) + r["SOPInstanceUID"] + ".jpg")
+        imgs.append(cv2.imread(str(img_path)))
+    return imgs
+
 
 class RsnaDatasetTest(data.Dataset):
     """Test Time Dataset. for now, image level dataset"""
@@ -154,8 +218,8 @@ def hu_to_windows(img, WL=50, WW=350):
     X = (X*255.0).astype('uint8')
     return X
 
-def get_sorted_hu(df):
-    d = '../input/rsna-str-pulmonary-embolism-detection/test/' + df.StudyInstanceUID + '/' + df.SeriesInstanceUID + '/'
+def get_sorted_hu(df, folder='test'):
+    d = '../input/rsna-str-pulmonary-embolism-detection/' + folder + '/' + df.StudyInstanceUID + '/' + df.SeriesInstanceUID + '/'
     dicom_files = list((d + df.SOPInstanceUID + '.dcm').unique())
     hu_images, sop_arr = load_dicom_array(dicom_files)
     return hu_images, sop_arr

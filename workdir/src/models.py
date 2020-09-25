@@ -83,6 +83,25 @@ class ImgModelIndShallow(nn.Module):
             "qa_motion": x[:, 2],
         }
 
+import resnet3d.models.resnet
+class ImgModelInd3D(nn.Module):
+    """3D model for indeterminate"""
+    def __init__(self, model_depth, pretrained=True):
+        super().__init__()
+        self.base = resnet3d.models.resnet.generate_model(
+                    model_depth=model_depth, n_input_channels=1, n_classes=3)
+        # ckpt_path = {18: "resnet3d/r3d18_KM_200ep.pth"}[model_depth]
+        # ckpt =  torch.load(ckpt_path, map_location='cpu')
+        # self.base.load_state_dict(ckpt['state_dict'])
+
+    def forward(self, x):
+        x = self.base(x)
+        return {
+            "indeterminate": x[:, 0],
+            "qa_contrast": x[:, 1],
+            "qa_motion": x[:, 2],
+        }
+
 
 # img level model
 def get_img_model(config: dict):
