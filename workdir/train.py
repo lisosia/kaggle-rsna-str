@@ -85,7 +85,9 @@ def valid(cfg, model):
 def train(cfg, model):
     criterion = factory.get_criterion(cfg)
     optim = torch.optim.Adam(model.parameters(), lr=1e-3)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optim, milestones=[5], gamma=0.5)
+    scheduler, is_reduce_lr = factory.get_scheduler(cfg, optim)
+    log(f"is_reduce_lr: {is_reduce_lr}")
+
     best = {
         'loss': float('inf'),
         'score': 0.0,
@@ -102,10 +104,8 @@ def train(cfg, model):
     #     param_group['lr'] = 1e-3 * 0.5
     # log(f"initial lr {utils.get_lr(optim)}")
 
-    dataset_train = RsnaDataset3D(cfg["fold"], "train")
-    dataset_valid = RsnaDataset3D(cfg["fold"], "valid")
-    loader_train = DataLoader(dataset_train, batch_size=2, shuffle=True, pin_memory=True)  # 56
-    loader_valid = DataLoader(dataset_valid, batch_size=3, shuffle=False, pin_memory=True)  # 96
+    loader_train = factory.get_loader_train(cfg)
+    loader_valid = factory.get_loader_valid(cfg)
 
     log('train data: loaded %d records' % len(loader_train.dataset))
     log('valid data: loaded %d records' % len(loader_valid.dataset))
@@ -134,9 +134,11 @@ def train(cfg, model):
         utils.save_model(model, optim, detail, cfg["fold"], output_dir)
 
         log('[best] ep:%d loss:%.4f score:%.4f' % (best['epoch'], best['loss'], best['score']))
-            
-        #scheduler.step(val['loss']) # reducelronplateau
-        scheduler.step()
+
+        if is_reduce_lr:
+            scheduler.step(val['loss']) # reducelronplateau
+        else:
+            scheduler.step()
 
 def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None, apex=None):
     if mode in ['train']:

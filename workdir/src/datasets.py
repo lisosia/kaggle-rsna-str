@@ -88,10 +88,11 @@ class RsnaDataset(data.Dataset):
 
 class RsnaDataset3D(data.Dataset):
     """Study(Series) Level Dataset"""
-    def __init__(self, fold, phase):
+    def __init__(self, fold, phase, oversample=False):
         assert phase in ["train", "valid"]
         self.phase = phase
         self.datafir = DATADIR
+        self.oversample = oversample and phase=="train"
         # prepare df
         df = pd.read_csv(DATADIR / "train.csv")
         df_fold = pd.read_csv(DATADIR / "split.csv")
@@ -104,14 +105,36 @@ class RsnaDataset3D(data.Dataset):
         elif phase == "valid":
             self.df = df[df.fold == fold]
             self.transform = transforms.trans_ind_3d_valid
+        # self.df = self.df.iloc[:20000]  # debug
         self.studies = self.df.StudyInstanceUID.unique()
-        # self.df = self.df.iloc[:2000]  # debug
+
+        if self.oversample:  # oversample for indeterminate
+            print("RsnaDataset3D indeterminate oversampled")
+            studies_df = self.df.groupby("StudyInstanceUID").first().reset_index()  # study->each-col
+            self.ind_num = studies_df.indeterminate.sum()
+            self.not_ind_num = len(studies_df) - self.ind_num
+            assert self.ind_num + self.not_ind_num == len(studies_df)
+            assert self.ind_num < self.not_ind_num  # confirm indeterminate is minor
+            self.df_ind = studies_df[studies_df.indeterminate == 1]
+            self.df_not_ind = studies_df[studies_df.indeterminate == 0]
 
     def __len__(self):
-        return len(self.studies)
+        if self.oversample:
+            return 2 * self.not_ind_num
+        else:
+            return len(self.studies)
     
-    def __getitem__(self, idx: int):
-        study_id = self.studies[idx]
+    def __getitem__(self, ind: int):
+        if self.oversample:
+            if ind < self.not_ind_num:  # pick not-indeterminate
+                study_id = self.df_not_ind.iloc[ind].StudyInstanceUID
+            else:  # pick indeterminte (oversmapled)
+                study_id = self.df_ind.iloc[ind % self.ind_num].StudyInstanceUID
+        else:
+            study_id = self.studies[ind]
+        return self.__getitem__one(study_id)
+
+    def __getitem__one(self, study_id):
         df = self.df[self.df.StudyInstanceUID == study_id]
         # label
         label = rawlabel_to_label_study_level(df.iloc[0])

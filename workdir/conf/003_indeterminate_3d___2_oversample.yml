@@ -1,0 +1,34 @@
+epoch: 30
+n_grad_acc: 1
+
+model:
+  class: ImgModelInd3D
+  param:
+    model_depth: 10
+
+criterion:
+  class: ImgLossInd
+  param: {}
+
+# RsnaDataset3D
+dataset:
+  class: RsnaDataset3D
+  param:
+    oversample: True
+
+dataloader_train:
+  param:
+    batch_size: 3
+    num_workers: 4
+dataloader_valid:
+  param:
+    batch_size: 4
+    num_workers: 4
+
+scheduler:
+  class: ReduceLROnPlateau
+  param:
+    factor: 0.5
+    patience: 1
+    verbose: True
+

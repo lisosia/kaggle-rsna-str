@@ -90,11 +90,14 @@ class ImgModelInd3D(nn.Module):
         super().__init__()
         self.base = resnet3d.models.resnet.generate_model(
                     model_depth=model_depth, n_input_channels=1, n_classes=3)
+        # # load Pretrain
         # ckpt_path = {18: "resnet3d/r3d18_KM_200ep.pth"}[model_depth]
         # ckpt =  torch.load(ckpt_path, map_location='cpu')
         # self.base.load_state_dict(ckpt['state_dict'])
+        # self.base.fc = nn.Linear(self.base.fc.in_features, 3)
 
     def forward(self, x):
+        # x = x.repeat(1,3,1,1,1)  # for pretrain
         x = self.base(x)
         return {
             "indeterminate": x[:, 0],

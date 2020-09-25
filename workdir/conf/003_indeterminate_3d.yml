@@ -1,0 +1,13 @@
+epoch: 6
+n_grad_acc: 1
+
+model:
+  class: ImgModelInd3D
+  param:
+    model_depth: 10
+
+criterion:
+  class: ImgLossInd
+  param: {}
+
+# RsnaDataset3D
