@@ -1,0 +1,33 @@
+# resume 002_indeterminate_3_shallow
+# shallow hrnet like 2d-cnn to detect indeterminate
+epoch: 30
+n_grad_acc: 1
+
+model:
+  class: ImgModelIndShallow
+  param: {}
+
+criterion:
+  class: ImgLossInd
+  param: {}
+
+dataset:
+  class: RsnaDataset
+  param: {}
+
+dataloader_train:
+  param:
+    batch_size: 56
+    num_workers: 4
+dataloader_valid:
+  param:
+    batch_size: 96
+    num_workers: 4
+
+scheduler:
+  class: ReduceLROnPlateau
+  param:
+    factor: 0.5
+    patience: 1
+    verbose: True
+
