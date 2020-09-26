@@ -9,7 +9,7 @@ import time
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import f1_score, precision_recall_fscore_support
+from sklearn.metrics import f1_score, precision_recall_fscore_support, log_loss
 import torch
 import torch.optim
 from torch.utils.data import DataLoader
@@ -31,6 +31,7 @@ def get_args():
     parser.add_argument("--apex", action='store_true', default=False, help="apex")
     parser.add_argument("--output", "-o", help="output path for validation")
     parser.add_argument("--snapshot", "-s", help="snapshot weight path")
+    parser.add_argument("--resume-from", help="snapshot to resume train")
     return parser.parse_args()
 args = get_args()
 if args.apex:
@@ -55,6 +56,7 @@ def main():
     config["apex"] = args.apex
     config["output"] = args.output
     config["snapshot"] = args.snapshot
+    config["resume_from"] = args.resume_from
 
     utils.set_seed(SEED)
     device = torch.device(DEVICE)
@@ -74,8 +76,7 @@ def valid(cfg, model):
     assert cfg["output"]
     criterion = factory.get_criterion(cfg)
     utils.load_model(cfg["snapshot"], model)
-    dataset_valid = RsnaDataset3D(cfg["fold"], "valid")
-    loader_valid = DataLoader(dataset_valid, batch_size=4, shuffle=False, pin_memory=True, num_workers=4)  #bs224
+    loader_valid = factory.get_loader_valid(cfg)
     with torch.no_grad():
         results = run_nn(cfg, 'valid', model, loader_valid, criterion=criterion)
     utils.save_pickle(results, cfg["output"])
@@ -85,8 +86,6 @@ def valid(cfg, model):
 def train(cfg, model):
     criterion = factory.get_criterion(cfg)
     optim = torch.optim.Adam(model.parameters(), lr=1e-3)
-    scheduler, is_reduce_lr = factory.get_scheduler(cfg, optim)
-    log(f"is_reduce_lr: {is_reduce_lr}")
 
     best = {
         'loss': float('inf'),
@@ -100,9 +99,14 @@ def train(cfg, model):
             'score': detail['score'],
             'epoch': detail['epoch'],
         })
+
+    # # to set lr manually after resumed
     # for param_group in optim.param_groups:
     #     param_group['lr'] = 1e-3 * 0.5
     # log(f"initial lr {utils.get_lr(optim)}")
+
+    scheduler, is_reduce_lr = factory.get_scheduler(cfg, optim)
+    log(f"is_reduce_lr: {is_reduce_lr}")
 
     loader_train = factory.get_loader_train(cfg)
     loader_valid = factory.get_loader_valid(cfg)
@@ -201,16 +205,15 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
     }
 
     if mode in ['train', 'valid']:
-        # result.update(calc_acc(result['targets'], result['outputs']))
-        # result['score'] = result['acc']
-        SCORE_KEY = "acc_indeterminate"
-        SHOW_KEYS = ["acc_indeterminate", "acc_qa_contrast", "acc_qa_motion"]
+        SCORE_KEY = "logloss_indeterminate"
         result.update(calc_acc_ind(result['targets'], result['outputs']))
         result.update(calc_f1_ind(result['targets'], result['outputs']))
+        result.update(calc_logloss_ind(result['targets'], result['outputs']))
+
         result['score'] = result[SCORE_KEY]
 
-        # log(progress + ' auc:%.4f micro:%.4f macro:%.4f' % (result['auc'], result['auc_micro'], result['auc_macro']))
-        # log(progress + ' acc:%.4f' % (result['acc']))
+        # SHOW_KEYS = ["acc_indeterminate", "acc_qa_contrast", "acc_qa_motion"]
+        SHOW_KEYS = [k for k in result.keys() if not k in ['ids', 'targets', 'outputs', 'loss']]
         log(progress + ' '.join([k+':%.4f ' % result[k] for k in SHOW_KEYS]))
         log('ave_loss:%.6f' % (result['loss']))
     else:
@@ -236,8 +239,13 @@ def calc_f1_ind(targets, outputs):
         ret["pre_" + k] = pre
         ret["rec_" + k] = rec
         ret["f1_" + k] = f1
-    print(ret)
     return ret
+def calc_logloss_ind(targets, outputs):
+    ret = {}
+    for k in ["indeterminate", "qa_contrast", "qa_motion"]:
+        ret["logloss_" + k] = log_loss(targets[k], outputs[k], eps=1e-2)
+    return ret
+
 
 if __name__ == "__main__":
     main()

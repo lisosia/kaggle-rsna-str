@@ -68,7 +68,7 @@ class RsnaDataset(data.Dataset):
         elif phase == "valid":
             self.df = df[df.fold == fold]
             self.transform = get_transform_valid_v1()
-        # self.df = self.df.iloc[:20000]  # debug
+        # self.df = self.df.iloc[40000:60000]  # debug
 
     def __len__(self):
         return len(self.df)
