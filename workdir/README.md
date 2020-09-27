@@ -8,6 +8,22 @@ effnet-b0 ep1(0origin)が最大. それ以降はloss上昇. accもほぼ低下
 ep1のmetric:
     acc_pe_present_on_image:0.9628  pre_pe_present_on_image:0.7161  rec_pe_present_on_image:0.5576  f1_pe_present_on_image:0.6270  logloss_pe_present_on_image:0.1179
 
+010
+left,right,centerをsub-taskで学習
+epo6, [best] ep:0 loss:0.1924
+    acc_pe_present_on_image:0.9650  acc_rightsided_pe:0.9653  acc_leftsided_pe:0.9658  acc_central_pe:0.9805  
+    pre_pe_present_on_image:0.8836  rec_pe_present_on_image:0.4342  f1_pe_present_on_image:0.5822  
+    pre_rightsided_pe:0.9151  rec_rightsided_pe:0.3803  f1_rightsided_pe:0.5373  
+    pre_leftsided_pe:0.9093  rec_leftsided_pe:0.3488  f1_leftsided_pe:0.5042  
+    pre_central_pe:0.6773  rec_central_pe:0.0414  f1_central_pe:0.0781  
+    logloss_pe_present_on_image:0.1129  logloss_rightsided_pe:0.1111  logloss_leftsided_pe:0.1093  logloss_central_pe:0.0588
+    score:0.1129 
+[比較対象]: image-level. ex. [C] => pe_presentかつcenter_peをpositiveとしたときの, mean-predictionのlogloss
+    [R] percentage 0.050096, mean-pred-logloss 0.198797
+    [L] percentage 0.046010, mean-pred-logloss 0.186596
+    [C] percentage 0.017059, mean-pred-logloss 0.086362
+    [PE_PREESNT] percentage 0.053915, mean-pred-logloss 0.209885
+        => mean-predより良い.
 
 #### indeterminate
 baseline:
