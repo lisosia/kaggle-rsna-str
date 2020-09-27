@@ -2,9 +2,9 @@ set -xe
 
 DATANAME=rsna-src
 
-M1=output/001_base/fold0_ep1.pt
+M1=output/010_pe_pos/fold0_ep0.pt
 
-COMMENT="sub test. exp001, agg-by-95percentile, other are filled by average"
+COMMENT="010 pe_present+pe_position. pe_pre-agg 95p, position-agg by sum(probs_right)/sum(probs_pe_pre)"
 
 OUT=../input/$DATANAME/workdir.tar_
 rm $OUT

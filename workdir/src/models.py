@@ -95,11 +95,12 @@ class ImgModelIndShallow(nn.Module):
             "qa_motion": x[:, 2],
         }
 
-import resnet3d.models.resnet
+
 class ImgModelInd3D(nn.Module):
     """3D model for indeterminate"""
     def __init__(self, model_depth, pretrained=True):
         super().__init__()
+        import resnet3d.models.resnet
         self.base = resnet3d.models.resnet.generate_model(
                     model_depth=model_depth, n_input_channels=1, n_classes=3)
         # # load Pretrain

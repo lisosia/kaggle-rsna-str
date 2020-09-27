@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+from collections import defaultdict
 from pathlib import Path
 import pickle
 import sys
@@ -14,7 +15,7 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 import src.configuration as C
-from src.models import get_img_model, ImgModel
+from src.models import get_img_model, ImgModelPE
 import src.utils as utils
 from src.utils import get_logger
 from src.criterion import ImgLoss
@@ -105,31 +106,56 @@ def main():
         return
 
 
-    ### model 001 : image-level pred of pe_present_on_image
-    model = ImgModel(archi="efficientnet_b0", pretrained=False).to(device)
+    # ### model 001 : image-level pred of pe_present_on_image
+    # model = ImgModel(archi="efficientnet_b0", pretrained=False).to(device)
+    # result_pe = sub_2(None, model, args.weight_path)
+    ### model 010: pe_present+right,left,center
+    model = ImgModelPE(archi="efficientnet_b0", pretrained=False).to(device)
     log(f"Model type: {model.__class__.__name__}")
-    result_pe = sub_2(None, model, args.weight_path)
-    # result_pe = sub(None, model, args.weight_path)
-    utils.save_pickle(result_pe, 'cache/001.pickle')
+    result_pe = sub_3(None, model, args.weight_path)
+    utils.save_pickle(result_pe, 'cache/010.pickle')
 
     for study in df_test.StudyInstanceUID.unique():
         res = result_pe[study]
+        res_out = res["outputs"]
+
         # pe_present_on_image
-        for sop, pred in zip(res["ids"], res["outputs"]):
+        for sop, pred in zip(res["ids"], res["outputs"]["pe_present_on_image"]):
             df_sub.loc[sop, 'label'] = pred
+
+        # agg for right,left,center. pe_present-weighted average
+        # in real-labe, always, P(right) < P(pe_present)
+        # if predicted P(right) ~= P(pe_present) for most slices, then ave_right ~= 1
+        # below agg is euqal to `p(pe_present)`-weighted `p(right)/p(pe_present)`
+        pe_present_prob_sum = np.sum(res_out["pe_present_on_image"])
+        ave_right  = np.clip( np.sum(res_out["rightsided_pe"]) / pe_present_prob_sum, 0, 1)  #clipping so that average(right) < ave(pe_present)
+        ave_left   = np.clip( np.sum(res_out["leftsided_pe" ]) / pe_present_prob_sum, 0, 1)
+        ave_center = np.clip( np.sum(res_out["central_pe"]   ) / pe_present_prob_sum, 0, 1)
+        # postprocess like sqrt(p) may be good to push-up right/left/central probs for tackle half-right-slice,half-left-slice exam
 
         ### fill exam_type (negative, indeterminate, positive)
         # pos_exam_prob = np.power(np.mean(res["outputs"] ** 7), 1/7)
-        pos_exam_prob = np.percentile(res["outputs"], q=95)
+        pos_exam_prob = np.percentile(res["outputs"]["pe_present_on_image"], q=95)
 
-        print("pos_exam_prob", pos_exam_prob, "max_pe_present_prob", np.max(res["outputs"]))
+        print("pos_exam_prob", pos_exam_prob, "max_pe_present_prob", np.max(res["outputs"]["pe_present_on_image"]))
+        # print("DEBUG:", study, pos_exam_prob, "RLC", ave_right, ave_left, ave_center)
+
         indeterminate_prob = _MEANS['indeterminate']  # from average
         df_sub.loc[study + '_' + 'indeterminate', 'label'] = indeterminate_prob
         df_sub.loc[study + '_' + 'negative_exam_for_pe', 'label'] = (1 - indeterminate_prob) * (1 - pos_exam_prob)
 
+        ### fill right,left,central
+        pos_exam_prob_real = (1 - indeterminate_prob) * pos_exam_prob
+        df_sub.loc[study + '_' + "rightsided_pe", 'label'] = pos_exam_prob_real * ave_right
+        df_sub.loc[study + '_' + "leftsided_pe" , 'label'] = pos_exam_prob_real * ave_left
+        df_sub.loc[study + '_' + "central_pe"   , 'label'] = pos_exam_prob_real * ave_center
+
+        # for k in ['rv_lv_ratio_gte_1', 'rv_lv_ratio_lt_1', 'leftsided_pe', 'rightsided_pe', 'central_pe', 'chronic_pe', 'acute_and_chronic_pe']:
         # fill by pos_prob*ave_pos+(1-pos_prob)*ave_not_pos
-        for k in ['rv_lv_ratio_gte_1', 'rv_lv_ratio_lt_1', 'leftsided_pe', 'rightsided_pe', 'central_pe', 'chronic_pe', 'acute_and_chronic_pe']:
+        for k in ['rv_lv_ratio_gte_1', 'rv_lv_ratio_lt_1', 'chronic_pe', 'acute_and_chronic_pe']:
             df_sub.loc[study + '_' + k, 'label'] = pos_exam_prob * _MEANS_POS[k] + (1 - pos_exam_prob) * _MEANS_NOT_POS[k]
+
+        # import pdb; pdb.set_trace()
 
     df_sub.reset_index(inplace=True)
     df_sub.to_csv("submission.csv", index=False)
@@ -177,6 +203,39 @@ def sub_2(cfg, model, weight_path):
 
     print("per study result's keys(): ", result_all[study_id].keys())
     # import pdb; pdb.set_trace()
+    return result_all
+
+# sub 3: pe_present + right,left,center
+def sub_3(cfg, model, weight_path):
+    """
+    Returns: 
+    result_all["study_id"] -> {
+        "outputs" -> {"col_name1" -> np.ndarray, "col_name2 -> np.ndarray}
+        "ids -> sop_id_arr
+    }
+    """
+    utils.load_model(weight_path, model)
+    result_all = {}
+    model = model.eval()
+    dataset_sub  = RsnaDatasetTest2()
+    dataloader = DataLoader(dataset_sub, batch_size=1, shuffle=False, num_workers=3, collate_fn=lambda x:x)
+    for (item) in tqdm(dataloader):
+        imgs, study_id, sop_arr = item[0]
+        _bs = 128
+        outputs_all = defaultdict(list)
+        for i in np.arange(0, len(sop_arr), step=_bs):
+            _imgs = torch.from_numpy(imgs[i: i+_bs]).cuda()
+            with torch.no_grad():
+                outputs = model(_imgs)
+            for _k in outputs.keys():  # iter over output keys:
+                outputs_all[_k].extend(torch.sigmoid(outputs[_k]).cpu().numpy())  # currently all output is binarty logit
+        result_all[study_id] = {
+            "outputs": dict([(k, np.array(v)) for k, v in outputs_all.items()]),
+            "ids": np.array(sop_arr),
+        }
+        if args.debug: break
+
+    print("per study result's keys(): ", result_all[study_id].keys())
     return result_all
 
 
