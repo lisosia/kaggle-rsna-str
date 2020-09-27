@@ -30,6 +30,9 @@ def get_args():
     parser.add_argument("weight_path", help="weight path")
     parser.add_argument("--debug", action='store_true', help="debug")
     parser.add_argument("--skip", action='store_true', help="skip for commit-time infer")
+    parser.add_argument("--validation", action='store_true', help="for validation")
+    ### post process
+    parser.add_argument("--post1-percentile", required=True, type=float, help="postprocess1, percentile")
     return parser.parse_args()
 args = get_args()
 
@@ -75,7 +78,8 @@ _MEANS_NOT_POS = {
     'indeterminate': 0.029395147556748744}
 
 def load_sub_filled_average():
-    sub = pd.read_csv(DATADIR / "sample_submission.csv")
+    sample_sub_path = "sample_submission.csv" if not args.validation else "validation/fold0.sample_submission.csv"
+    sub = pd.read_csv(DATADIR / sample_sub_path)
     sub['label'] = _MEANS['pe_present_on_image']
     for feat in _MEANS.keys():
         sub.loc[sub.id.str.contains(feat, regex=False), 'label'] = _MEANS[feat]
@@ -87,7 +91,8 @@ def main():
     device = torch.device(DEVICE)
 
     # prepare Dataframe first
-    df_test = pd.read_csv(DATADIR / "test.csv")
+    TEST_PATH = "test.csv" if not args.validation else "validation/fold0.test.csv"
+    df_test = pd.read_csv(DATADIR / TEST_PATH)
     df_sub = load_sub_filled_average()
     df_sub = df_sub.set_index('id')
 
@@ -135,7 +140,7 @@ def main():
 
         ### fill exam_type (negative, indeterminate, positive)
         # pos_exam_prob = np.power(np.mean(res["outputs"] ** 7), 1/7)
-        pos_exam_prob = np.percentile(res["outputs"]["pe_present_on_image"], q=95)
+        pos_exam_prob = np.percentile(res["outputs"]["pe_present_on_image"], q=args.post1_percentile)
 
         print("pos_exam_prob", pos_exam_prob, "max_pe_present_prob", np.max(res["outputs"]["pe_present_on_image"]))
         # print("DEBUG:", study, pos_exam_prob, "RLC", ave_right, ave_left, ave_center)
