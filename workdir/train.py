@@ -92,7 +92,7 @@ def train(cfg, model):
         'score': 0.0,
         'epoch': -1,
     }
-    if "resume_from" in cfg.keys():
+    if cfg["resume_from"]:
         detail = utils.load_model(cfg["resume_from"], model, optim=optim)
         best.update({
             'loss': detail['loss'],
@@ -205,10 +205,14 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
     }
 
     if mode in ['train', 'valid']:
-        SCORE_KEY = "logloss_indeterminate"
-        result.update(calc_acc_ind(result['targets'], result['outputs']))
-        result.update(calc_f1_ind(result['targets'], result['outputs']))
-        result.update(calc_logloss_ind(result['targets'], result['outputs']))
+        # SCORE_KEY = "logloss_indeterminate"
+        # KEYS = ["indeterminate", "qa_contrast", "qa_motion"]
+        SCORE_KEY = "logloss_pe_present_on_image"
+        KEYS = ["pe_present_on_image"] + ["rightsided_pe", "leftsided_pe", "central_pe"]
+
+        result.update(calc_acc(result['targets'], result['outputs'], KEYS))
+        result.update(calc_f1(result['targets'], result['outputs'], KEYS))
+        result.update(calc_logloss(result['targets'], result['outputs'], KEYS))
 
         result['score'] = result[SCORE_KEY]
 
@@ -222,28 +226,28 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
     return result
 
 # metric functions. return {"metric_name": val}
-def calc_acc(targets, outputs):
+def calc_acc_nokey(targets, outputs):  # not used now
     cor = np.sum(targets == np.round(outputs))
     return {"acc": cor / float(len(targets))}
 
-def calc_acc_ind(targets, outputs):
+def calc_acc(targets, outputs, keys):
     ret = {}
-    for k in ["indeterminate", "qa_contrast", "qa_motion"]:
-        cor = np.sum(targets[k] == np.round(outputs[k]))
+    for k in keys:
+        cor = np.sum(np.round(targets[k]) == np.round(outputs[k]))
         ret["acc_" + k] = cor / float(len(targets[k]))
     return ret
-def calc_f1_ind(targets, outputs):
+def calc_f1(targets, outputs, keys):
     ret = {}
-    for k in ["indeterminate", "qa_contrast", "qa_motion"]:
-        pre, rec, f1, _ = precision_recall_fscore_support(targets[k], np.round(outputs[k]), average='binary')
+    for k in keys:
+        pre, rec, f1, _ = precision_recall_fscore_support(np.round(targets[k]), np.round(outputs[k]), average='binary')
         ret["pre_" + k] = pre
         ret["rec_" + k] = rec
         ret["f1_" + k] = f1
     return ret
-def calc_logloss_ind(targets, outputs):
+def calc_logloss(targets, outputs, keys):
     ret = {}
-    for k in ["indeterminate", "qa_contrast", "qa_motion"]:
-        ret["logloss_" + k] = log_loss(targets[k], outputs[k], eps=1e-2)
+    for k in keys:
+        ret["logloss_" + k] = log_loss(np.round(targets[k]), outputs[k])
     return ret
 
 

@@ -15,6 +15,18 @@ class ImgModel(nn.Module):
             "pe_present_on_image": x
         }
 
+class ImgModelPE(nn.Module):
+    def __init__(self, archi, pretrained=True):
+        super().__init__()
+        self.base = timm.create_model(archi, pretrained=pretrained, num_classes=4)
+    def forward(self, x):
+        x = self.base(x)
+        return {
+            "pe_present_on_image": x[:, 0],
+            "rightsided_pe": x[:, 1],
+            "leftsided_pe": x[:, 2],
+            "central_pe": x[:, 3],
+        }
 
 ## Indeterminate: 3ch image-level model
 ## 以下3点が主なTODO. acc をみつつ判断する

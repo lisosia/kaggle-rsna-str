@@ -1,22 +1,31 @@
-##### exp
+## exp
+
+#### PE and PE-position
 001 
 image level data. `pe_present_on_image` のみ train
-effnet-b0 epo1が最大. それ以降はloss上昇. accもほぼ低下
+effnet-b0 ep1(0origin)が最大. それ以降はloss上昇. accもほぼ低下
 一応,lr=1e-3 * 0.5 で finetuneしたが同様にoverfit
+ep1のmetric:
+    acc_pe_present_on_image:0.9628  pre_pe_present_on_image:0.7161  rec_pe_present_on_image:0.5576  f1_pe_present_on_image:0.6270  logloss_pe_present_on_image:0.1179
+
+
+#### indeterminate
+baseline:
+   indeterminate単体. mean-prediction logloss => 0.099920  ※`p*log(p)+(1-p)*log(1-p)`
+   すべて0.2でpredictしたときの, 今のcriterionでのtotal-loss=> 0.3375
 
 * 002_indeterminate/
 effnet_b0, 3window, img-level
-5epo [best] ep:0 loss:0.4336
+5epo [best] ep:0 total-loss:0.4336
 
 * 002_indeterminate_3_shallow
 浅い&high-reso重視の2d-CNN, 3window
-[2poch] ep:0 loss:0.2969 <===current best
+[2poch] ep:0 totalloss:0.2969 <===current best
    ※細かいmetric未実装
     epo:1  total-loss=0.305876, logloss_indeterminate:0.0904  logloss_qa_contrast:0.0805  logloss_qa_motion:0.0446 
     mean-prediction のlogloss(0.098)よりすこしだけよい
       eps=1e-3でprobをclip => loglossすべて全く変わらず
       eps=1e-2でprobをclip => ほんのすこし悪くなる(logloss_indeterminate:0.0905)
-
 
 * 004_indeterminate_3d_pretrain.yml
 pretrainがないのが悪いのではと思って,

@@ -21,20 +21,29 @@ def _encode_pe_type(row): return _PE_TYPES.index(row["pe_type"])
 def _decode_pe_type(idx): return _PE_TYPES[idx]
 
 def rawlabel_to_label(row) -> dict:
-    return dict({
+    ret = dict({
         "exam_type": _encode_exam_type(row),
             "indeterminate": row["indeterminate"],  # dup
         "pe_present_on_image": row["pe_present_on_image"],  # can be is only when exam_type positive
         # "pe_type": _encode_pe_type(row),                    # valid only when exam_type=True and pe_present_on_image
         "rv_lv_ratio_gte_1": row["rv_lv_ratio_gte_1"],      # valid only when exam_type=True and pe_present_on_image
-        "rightsided_pe": row["rightsided_pe"],  # valid only when exam_type=True and pe_present_on_image, not-exclusive
-        "leftsided_pe": row["leftsided_pe"],    # valid only when exam_type=True and pe_present_on_image, not-exclusive
-        "central_pe": row["central_pe"],        # valid only when exam_type=True and pe_present_on_image, not-exclusive
+        "rightsided_pe": row["rightsided_pe"] * row["pe_present_on_image"],  # valid only when exam_type=True and pe_present_on_image, not-exclusive
+        "leftsided_pe":  row["leftsided_pe"]  * row["pe_present_on_image"],  # valid only when exam_type=True and pe_present_on_image, not-exclusive
+        "central_pe":    row["central_pe"]    * row["pe_present_on_image"],  # valid only when exam_type=True and pe_present_on_image, not-exclusive
         "qa_motion": row["qa_motion"],     # could be 1 when and only when indeterminate
         "qa_contrast": row["qa_contrast"], # could be 1 when and only when indeterminate
         "flow_artifact": row["flow_artifact"],  # [optional] always valid
         "true_filling_defect_not_pe": row["true_filling_defect_not_pe"],  # [optional] valid when exam_type positive or negative
     })
+    # if multi position has pe, each slice may have one individual pe (left or right or center)
+    # so use soft-label.
+    if ret["pe_present_on_image"] > 0.5 and (ret["rightsided_pe"]+ret["leftsided_pe"]+ret["central_pe"]) > 1:
+        EPS=0.1
+        ret["rightsided_pe"] = np.clip(ret["rightsided_pe"], 0, 1-EPS)
+        ret["leftsided_pe"] = np.clip(ret["leftsided_pe"], 0, 1-EPS)
+        ret["central_pe"] = np.clip(ret["central_pe"], 0, 1-EPS)
+    return ret
+
 def rawlabel_to_label_study_level(row) -> dict:
     return dict({
         "exam_type": _encode_exam_type(row),
@@ -68,7 +77,7 @@ class RsnaDataset(data.Dataset):
         elif phase == "valid":
             self.df = df[df.fold == fold]
             self.transform = get_transform_valid_v1()
-        # self.df = self.df.iloc[40000:60000]  # debug
+        # self.df = self.df.iloc[:6000]  # debug
 
     def __len__(self):
         return len(self.df)
