@@ -207,8 +207,12 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
     if mode in ['train', 'valid']:
         # SCORE_KEY = "logloss_indeterminate"
         # KEYS = ["indeterminate", "qa_contrast", "qa_motion"]
+        # ### PE+pe_position
+        # SCORE_KEY = "logloss_pe_present_on_image"
+        # KEYS = ["pe_present_on_image"] + ["rightsided_pe", "leftsided_pe", "central_pe"]
+        ### PE+pe_type(acute/choronic)
         SCORE_KEY = "logloss_pe_present_on_image"
-        KEYS = ["pe_present_on_image"] + ["rightsided_pe", "leftsided_pe", "central_pe"]
+        KEYS = ["pe_present_on_image"] + ["chronic_pe", "acute_and_chronic_pe"]  # + ["acute_pe"]
 
         result.update(calc_acc(result['targets'], result['outputs'], KEYS))
         result.update(calc_f1(result['targets'], result['outputs'], KEYS))
@@ -247,7 +251,7 @@ def calc_f1(targets, outputs, keys):
 def calc_logloss(targets, outputs, keys):
     ret = {}
     for k in keys:
-        ret["logloss_" + k] = log_loss(np.round(targets[k]), outputs[k])
+        ret["logloss_" + k] = log_loss(np.round(targets[k]), outputs[k], labels=[0,1])
     return ret
 
 

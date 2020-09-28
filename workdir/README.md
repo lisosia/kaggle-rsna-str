@@ -25,6 +25,27 @@ epo6, [best] ep:0 loss:0.1924
     [PE_PREESNT] percentage 0.053915, mean-pred-logloss 0.209885
         => mean-predより良い.
 
+postprocesesのpercentile. modelやepochに敏感 notebook/eda-postprocess.ipynb
+epoが進むと over-confidenceになっている
+soft-label したら緩和するかも
+
+■ わかったこと 09/29
+right,left,center予想の影響は, 現状モデルだととても小さい
+    exp010 pe pos q98.9   LB.317  　　※percentile98.9でbestなのはvalidationと一致. validationは信頼して良いかも
+    right,left,centerをexpected-meanでfill   LB.320
+    ＝＞改善は .003
+exp010(pe_presentのみinfer) に関しては epo0 << epo1
+    LB .320 => .305
+    ＝＞ .015 違う. しかし validation logloss は ep1のほうが小さい epo0=.1129 epo1=.2079
+さらに, pe_present以外のすべての列を exp001ep1 (LB0.264) と同じにしても
+    LB .305 => .302
+    .264との差は .038
+        ＝＝＝＞ pe_present がめちゃくちゃ重要
+        　　　　 にもかかわらず、local validation と一致していない？
+        　　　　　　　＝＝＝＞わかった。 image-level eval は pe_presentの量に Weightがある !  これが違いだと思われる
+　　　　　　　　　　　　　　　＝＞ POSITIVE-EXAMについてのみ, pe_presentが正確なら良い！！！！！！！！
+　　　　　　　　　　　　　　　　   　　ちなみに、しかもpos-portionが高いものは2乗で重要 (portion2倍だと, rowが2倍 & q_i が2倍)
+
 #### indeterminate
 baseline:
    indeterminate単体. mean-prediction logloss => 0.099920  ※`p*log(p)+(1-p)*log(1-p)`

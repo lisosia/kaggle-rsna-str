@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 import src.configuration as C
-from src.models import get_img_model, ImgModelPE
+from src.models import get_img_model, ImgModelPE, ImgModel
 import src.utils as utils
 from src.utils import get_logger
 from src.criterion import ImgLoss
@@ -86,6 +86,9 @@ def load_sub_filled_average():
     return sub
 
 
+DO_PE_POS_IEFER = False
+print("=== DO_PE_POS_IEFER", DO_PE_POS_IEFER)
+
 def main():
     utils.set_seed(SEED)
     device = torch.device(DEVICE)
@@ -116,6 +119,7 @@ def main():
     # result_pe = sub_2(None, model, args.weight_path)
     ### model 010: pe_present+right,left,center
     model = ImgModelPE(archi="efficientnet_b0", pretrained=False).to(device)
+
     log(f"Model type: {model.__class__.__name__}")
     result_pe = sub_3(None, model, args.weight_path)
     utils.save_pickle(result_pe, 'cache/010.pickle')
@@ -128,15 +132,16 @@ def main():
         for sop, pred in zip(res["ids"], res["outputs"]["pe_present_on_image"]):
             df_sub.loc[sop, 'label'] = pred
 
-        # agg for right,left,center. pe_present-weighted average
-        # in real-labe, always, P(right) < P(pe_present)
-        # if predicted P(right) ~= P(pe_present) for most slices, then ave_right ~= 1
-        # below agg is euqal to `p(pe_present)`-weighted `p(right)/p(pe_present)`
-        pe_present_prob_sum = np.sum(res_out["pe_present_on_image"])
-        ave_right  = np.clip( np.sum(res_out["rightsided_pe"]) / pe_present_prob_sum, 0, 1)  #clipping so that average(right) < ave(pe_present)
-        ave_left   = np.clip( np.sum(res_out["leftsided_pe" ]) / pe_present_prob_sum, 0, 1)
-        ave_center = np.clip( np.sum(res_out["central_pe"]   ) / pe_present_prob_sum, 0, 1)
-        # postprocess like sqrt(p) may be good to push-up right/left/central probs for tackle half-right-slice,half-left-slice exam
+        if DO_PE_POS_IEFER:
+            # agg for right,left,center. pe_present-weighted average
+            # in real-labe, always, P(right) < P(pe_present)
+            # if predicted P(right) ~= P(pe_present) for most slices, then ave_right ~= 1
+            # below agg is euqal to `p(pe_present)`-weighted `p(right)/p(pe_present)`
+            pe_present_prob_sum = np.sum(res_out["pe_present_on_image"])
+            ave_right  = np.clip( np.sum(res_out["rightsided_pe"]) / pe_present_prob_sum, 0, 1)  #clipping so that average(right) < ave(pe_present)
+            ave_left   = np.clip( np.sum(res_out["leftsided_pe" ]) / pe_present_prob_sum, 0, 1)
+            ave_center = np.clip( np.sum(res_out["central_pe"]   ) / pe_present_prob_sum, 0, 1)
+            # postprocess like sqrt(p) may be good to push-up right/left/central probs for tackle half-right-slice,half-left-slice exam
 
         ### fill exam_type (negative, indeterminate, positive)
         # pos_exam_prob = np.power(np.mean(res["outputs"] ** 7), 1/7)
@@ -150,10 +155,15 @@ def main():
         df_sub.loc[study + '_' + 'negative_exam_for_pe', 'label'] = (1 - indeterminate_prob) * (1 - pos_exam_prob)
 
         ### fill right,left,central
-        pos_exam_prob_real = (1 - indeterminate_prob) * pos_exam_prob
-        df_sub.loc[study + '_' + "rightsided_pe", 'label'] = pos_exam_prob_real * ave_right
-        df_sub.loc[study + '_' + "leftsided_pe" , 'label'] = pos_exam_prob_real * ave_left
-        df_sub.loc[study + '_' + "central_pe"   , 'label'] = pos_exam_prob_real * ave_center
+        if DO_PE_POS_IEFER:
+            pos_exam_prob_real = (1 - indeterminate_prob) * pos_exam_prob
+            df_sub.loc[study + '_' + "rightsided_pe", 'label'] = pos_exam_prob_real * ave_right
+            df_sub.loc[study + '_' + "leftsided_pe" , 'label'] = pos_exam_prob_real * ave_left
+            df_sub.loc[study + '_' + "central_pe"   , 'label'] = pos_exam_prob_real * ave_center
+        else:
+            for k in ['leftsided_pe', 'rightsided_pe', 'central_pe']:
+                df_sub.loc[study + '_' + k, 'label'] = pos_exam_prob * _MEANS_POS[k] + (1 - pos_exam_prob) * _MEANS_NOT_POS[k]
+
 
         # for k in ['rv_lv_ratio_gte_1', 'rv_lv_ratio_lt_1', 'leftsided_pe', 'rightsided_pe', 'central_pe', 'chronic_pe', 'acute_and_chronic_pe']:
         # fill by pos_prob*ave_pos+(1-pos_prob)*ave_not_pos

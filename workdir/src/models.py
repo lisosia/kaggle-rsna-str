@@ -28,6 +28,21 @@ class ImgModelPE(nn.Module):
             "central_pe": x[:, 3],
         }
 
+
+class ImgModelChronic(nn.Module):
+    def __init__(self, archi, pretrained=True):
+        super().__init__()
+        self.base = timm.create_model(archi, pretrained=pretrained, num_classes=4)
+    def forward(self, x):
+        x = self.base(x)
+        return {
+            "pe_present_on_image": x[:, 0],
+            "chronic_pe": x[:, 1],
+            "acute_and_chronic_pe": x[:, 2],
+            "acute_pe": x[:, 3],
+        }
+
+
 ## Indeterminate: 3ch image-level model
 ## 以下3点が主なTODO. acc をみつつ判断する
 # - 3D方向に見ないとqa_motion等は検知できない疑いがある
