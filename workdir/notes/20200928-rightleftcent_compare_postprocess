@@ -1,0 +1,73 @@
+後処理を比べた
+percentileを直にt茎葉したほうが少しだけ良い
+しかし、以前の expected-average-fill (pastの行) とほぼ変わらない
+
+RIGHT,ENTRALはよい? RIGHTだけ明確に悪い . softlabelしすぎ?
+おそらくsolftlabelのやりすぎで、
+right, left の prob は, centralにくらべて 小さくなってしまっている ( not-equally-calibrated )
+※↑をやってもまだ誤差レベル
+
+### NOW=> (1-MEANS_IND) * pe_prob *  ave_right
+q=98.90 logloss:0.374433233989411
+RIGHT
+    now  logloss:0.36264013748709606
+    past logloss:0.35746662291195486
+    base logloss:0.5762224411886869
+RIGHT
+   logloss:0.331738881346827
+   logloss:0.3401054436957059
+   logloss:0.5300883358743675
+CENTRAL
+   logloss:0.13867651198162254
+   logloss:0.15980939159137056
+   logloss:0.23192769500092492
+
+### pe_prob *  ave_right
+RIGHT
+    now  logloss:0.3605934211746464
+    past logloss:0.35746662291195486
+    base logloss:0.5762224411886869
+RIGHT
+   logloss:0.33040472383605973
+   logloss:0.3401054436957059
+   logloss:0.5300883358743675
+CENTRAL
+   logloss:0.13852322591623253
+   logloss:0.15980939159137056
+   logloss:0.23192769500092492
+
+### (1-MEANS_IND) * np.percentile( prediction.rightsided_pe, 99 )
+RIGHT
+   logloss:0.355762810744593
+LEFT
+   logloss:0.32580564999094774
+CENTRAL
+   logloss:0.13494355153607876
+
+### np.percentile( prediction.rightsided_pe, 99 )
+RIGHT
+   logloss:0.3537246211648383
+RIGHT
+   logloss:0.3246654908197116
+CENTRAL
+   logloss:0.13524222657702753
+   
+### np.percentile( prediction.rightsided_pe, 99 ) * 1.05
+RIGHT
+    now  logloss:0.3494078499703598  <<<=== .004よくなる
+LEFT
+   logloss:0.32247745527341193   <<<=== .002よくなる
+CENTRAL
+   logloss:0.13614038782365484   <<<===悪化
+
+### np.percentile( prediction.rightsided_pe, 99 ) * 1.15
+RIGHT
+    now  logloss:0.3451702421090064 <<== .008 better
+LFET
+   logloss:0.3214743942633246  <=== .003 better
+CENTRAL
+   logloss:0.1386441131671042  <=== .004 worse
+   
+結論：
+おそらくsolftlabelのやりすぎで、
+right, left の prob は, centralにくらべて 小さくなってしまっている ( not-equally-calibrated )
