@@ -185,9 +185,11 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
         with torch.no_grad():
             ids_all.extend(ids)
             for _k in outputs.keys():  # iter over output keys
-                if mode != 'test':
-                    targets_all[_k].extend(targets[_k].cpu().numpy())
                 outputs_all[_k].extend(torch.sigmoid(outputs[_k]).cpu().numpy())
+            if mode != 'test':
+                for _k in list(outputs.keys()) + ['pe_present_portion']:
+                    targets_all[_k].extend(targets[_k].cpu().numpy())
+
             #outputs_all.extend(torch.sigmoid(outputs["pe_present_on_image"]).cpu().numpy())
             #outputs_all.append(torch.softmax(outputs, dim=1).cpu().numpy())
 
@@ -212,11 +214,14 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
         # KEYS = ["pe_present_on_image"] + ["rightsided_pe", "leftsided_pe", "central_pe"]
         ### PE+pe_type(acute/choronic)
         SCORE_KEY = "logloss_pe_present_on_image"
-        KEYS = ["pe_present_on_image"] + ["chronic_pe", "acute_and_chronic_pe"]  # + ["acute_pe"]
+        KEYS = ["pe_present_on_image"]   # + ["chronic_pe", "acute_and_chronic_pe"]  # + ["acute_pe"]
 
         result.update(calc_acc(result['targets'], result['outputs'], KEYS))
         result.update(calc_f1(result['targets'], result['outputs'], KEYS))
         result.update(calc_logloss(result['targets'], result['outputs'], KEYS))
+        if "pe_present_on_image" in KEYS:
+            result.update(calc_logloss_weighted_present(result['targets'], result['outputs']))
+
 
         result['score'] = result[SCORE_KEY]
 
@@ -251,9 +256,13 @@ def calc_f1(targets, outputs, keys):
 def calc_logloss(targets, outputs, keys):
     ret = {}
     for k in keys:
-        ret["logloss_" + k] = log_loss(np.round(targets[k]), outputs[k], labels=[0,1])
+        ret["logloss_" + k] = log_loss(np.round(targets[k]), outputs[k], labels=[0,1], eps=1e-7)
     return ret
-
+def calc_logloss_weighted_present(targets, outputs):
+    weight = targets['pe_present_portion']
+    logloss = log_loss(np.round(targets['pe_present_on_image']), outputs['pe_present_on_image'],
+                       sample_weight=weight, labels=[0,1], eps=1e-7)
+    return {'logloss_pe_present_weighted': logloss}
 
 if __name__ == "__main__":
     main()

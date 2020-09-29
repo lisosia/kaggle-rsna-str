@@ -38,6 +38,8 @@ def rawlabel_to_label(row) -> dict:
         "qa_contrast": row["qa_contrast"], # could be 1 when and only when indeterminate
         "flow_artifact": row["flow_artifact"],  # [optional] always valid
         "true_filling_defect_not_pe": row["true_filling_defect_not_pe"],  # [optional] valid when exam_type positive or negative
+
+        "pe_present_portion": row["pe_present_portion"],  # used for pe_present metric
     })
     # if multi position has pe, each slice may have one individual pe (left or right or center)
     # so use soft-label.
@@ -72,6 +74,7 @@ class RsnaDataset(data.Dataset):
         # prepare df
         df = pd.read_csv(DATADIR / "train.csv")
         df_fold = pd.read_csv(DATADIR / "split.csv")
+        df_fold = df_fold.merge(pd.read_csv(DATADIR / "study_pos_portion.csv"), on="StudyInstanceUID")  # add pe_present_portion col
         df = df.merge(df_fold, on="StudyInstanceUID")  # fold row
         df_prefix = pd.read_csv(DATADIR / "sop_to_prefix.csv")
         df = df.merge(df_prefix, on="SOPInstanceUID")  # img_prefix row
@@ -81,7 +84,7 @@ class RsnaDataset(data.Dataset):
         elif phase == "valid":
             self.df = df[df.fold == fold]
             self.transform = get_transform_valid_v1()
-        # self.df = self.df.iloc[:200]  # debug
+        # self.df = self.df.iloc[:600]  # debug
 
     def __len__(self):
         return len(self.df)
