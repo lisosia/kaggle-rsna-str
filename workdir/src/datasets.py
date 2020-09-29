@@ -48,6 +48,9 @@ def rawlabel_to_label(row) -> dict:
         ret["rightsided_pe"] = np.clip(ret["rightsided_pe"], 0, 1-EPS)
         ret["leftsided_pe"] = np.clip(ret["leftsided_pe"], 0, 1-EPS)
         ret["central_pe"] = np.clip(ret["central_pe"], 0, 1-EPS)
+    if True:
+        EPS = 1e-2
+        ret["pe_present_on_image"] = np.clip(ret["pe_present_on_image"], EPS, 1-EPS)
     return ret
 
 def rawlabel_to_label_study_level(row) -> dict:
@@ -67,8 +70,14 @@ def rawlabel_to_label_study_level(row) -> dict:
 
 class RsnaDataset(data.Dataset):
     """Image Level Dataset"""
-    def __init__(self, fold, phase):
+    def __init__(self, fold, phase, oversample=None):
+        """
+        oversample: 
+            example num is... pe_present_portion(all)/pe_present_portion(pos_exam) ~= 3.3
+            the metrics weights more for slices for high portion exam. so a little more big ratio may be better
+        """
         assert phase in ["train", "valid"]
+        self.oversample = oversample if (oversample and phase=="train") else None
         self.phase = phase
         self.datafir = DATADIR
         # prepare df
@@ -80,16 +89,36 @@ class RsnaDataset(data.Dataset):
         df = df.merge(df_prefix, on="SOPInstanceUID")  # img_prefix row
         if phase == "train":
             self.df = df[df.fold != fold]
-            self.transform = get_transform_v1()
+            # self.transform = get_transform_v1()
+            # self.transform = get_transform_v2()
+            self.transform = get_transform_v3()
+            print("train dataset transform", self.transform)
         elif phase == "valid":
             self.df = df[df.fold == fold]
             self.transform = get_transform_valid_v1()
         # self.df = self.df.iloc[:600]  # debug
+        if self.oversample:
+            assert isinstance(self.oversample, int) and self.oversample > 1  # sample positive `oversample` times
+            self.pe_present_num = len(self.df[self.df.pe_present_on_image == 1])
+            print(f"oversample: pe_present/total={self.pe_present_num}/{len(self.df)} . oversample={self.oversample}")
 
     def __len__(self):
-        return len(self.df)
-    
+        if self.oversample:
+            return len(self.df) + (self.oversample - 1) * self.pe_present_num
+        else:
+            return len(self.df)
+
     def __getitem__(self, idx: int):
+        if self.oversample:
+            if idx < len(self.df):
+                new_idx = idx
+            else:
+                new_idx = (idx - len(self.df)) % self.pe_present_num
+            return self.__getitem__one(new_idx)
+        else:
+            return self.__getitem__one(idx)
+
+    def __getitem__one(self, idx: int):
         sample = self.df.iloc[idx, :]
         # label
         label = rawlabel_to_label(sample)
@@ -176,6 +205,21 @@ def get_transform_v1():
     ])
 def get_transform_valid_v1():
     return alb.Compose([alb.CenterCrop(224, 244, p=1)])
+def get_transform_v2():
+    return alb.Compose([
+        alb.RandomCrop(224, 244, p=1),
+        alb.HorizontalFlip(p=0.5),
+        alb.VerticalFlip(p=0.5),
+    ])
+def get_transform_v3():
+    return alb.Compose([
+        alb.ShiftScaleRotate(shift_limit=0, scale_limit=0.1, rotate_limit=20, interpolation=cv2.INTER_AREA,
+                             border_mode=cv2.BORDER_CONSTANT, value=0, p=0.8),
+        alb.RandomCrop(224, 244, p=1),
+        alb.HorizontalFlip(p=0.5),
+        alb.VerticalFlip(p=0.5),
+        alb.CoarseDropout(min_holes=4, max_holes=7, min_height=12, min_width=12, max_height=30, max_width=30, p=0.85)
+    ])
 
 def get_img_jpg256_all(df):
     imgs = []

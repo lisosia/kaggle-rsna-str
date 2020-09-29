@@ -85,7 +85,8 @@ def valid(cfg, model):
 
 def train(cfg, model):
     criterion = factory.get_criterion(cfg)
-    optim = torch.optim.Adam(model.parameters(), lr=1e-3)
+    # optim = torch.optim.Adam(model.parameters(), lr=1e-3)
+    optim = factory.get_optimizer(cfg, model.parameters())
 
     best = {
         'loss': float('inf'),
@@ -102,7 +103,7 @@ def train(cfg, model):
 
     # # to set lr manually after resumed
     # for param_group in optim.param_groups:
-    #     param_group['lr'] = 1e-3 * 0.5
+    #     param_group['lr'] = 2e-4
     # log(f"initial lr {utils.get_lr(optim)}")
 
     scheduler, is_reduce_lr = factory.get_scheduler(cfg, optim)

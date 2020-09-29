@@ -24,6 +24,12 @@ def get_scheduler(config, optimizer: torch.optim.Optimizer):
     return sched, is_reduce_lr
 
 
+def get_optimizer(config, model_parameters):
+    c = config["optimizer"]
+    optimizer = getattr(torch.optim, c["class"])(model_parameters, **c["param"])
+    return optimizer
+
+
 def get_loader_train(config):
     c = config["dataset"]
     dataset_train = getattr(datasets, c["class"])(config["fold"], "train", **c["param"])
