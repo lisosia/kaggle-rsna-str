@@ -48,7 +48,7 @@ def rawlabel_to_label(row) -> dict:
         ret["rightsided_pe"] = np.clip(ret["rightsided_pe"], 0, 1-EPS)
         ret["leftsided_pe"] = np.clip(ret["leftsided_pe"], 0, 1-EPS)
         ret["central_pe"] = np.clip(ret["central_pe"], 0, 1-EPS)
-    if True:
+    if False:
         EPS = 1e-2
         ret["pe_present_on_image"] = np.clip(ret["pe_present_on_image"], EPS, 1-EPS)
     return ret
@@ -90,12 +90,12 @@ class RsnaDataset(data.Dataset):
         if phase == "train":
             self.df = df[df.fold != fold]
             # self.transform = get_transform_v1()
-            # self.transform = get_transform_v2()
-            self.transform = get_transform_v3()
+            self.transform = get_transform_v2_512()
+            # self.transform = get_transform_v3()
             print("train dataset transform", self.transform)
         elif phase == "valid":
             self.df = df[df.fold == fold]
-            self.transform = get_transform_valid_v1()
+            self.transform = get_transform_valid_v1_512()
         # self.df = self.df.iloc[:600]  # debug
         if self.oversample:
             assert isinstance(self.oversample, int) and self.oversample > 1  # sample positive `oversample` times
@@ -123,7 +123,8 @@ class RsnaDataset(data.Dataset):
         # label
         label = rawlabel_to_label(sample)
         # image
-        image = get_img_jpg256(sample)
+        # image = get_img_jpg256(sample)
+        image = get_img_jpg512(sample)
         if self.phase == "train":
             image = self.transform(image=image)["image"]
         image = (image.astype(np.float32) / 255).transpose(2,0,1)
@@ -198,6 +199,10 @@ def get_img_jpg256(r):
     folder = DATADIR / "train-jpegs" / r["StudyInstanceUID"] / r["SeriesInstanceUID"]
     img_path = folder / ('{:04}_'.format(r["img_prefix"]) + r["SOPInstanceUID"] + ".jpg")
     return cv2.imread(str(img_path))
+def get_img_jpg512(r):
+    folder = DATADIR / "train-jpegs-512"
+    img_path = folder / (r["SOPInstanceUID"] + ".jpg")
+    return cv2.imread(str(img_path))[:,:,::-1]
 
 def get_transform_v1():
     return alb.Compose([
@@ -205,12 +210,21 @@ def get_transform_v1():
     ])
 def get_transform_valid_v1():
     return alb.Compose([alb.CenterCrop(224, 244, p=1)])
+def get_transform_valid_v1_512():
+    return alb.Compose([alb.CenterCrop(448, 448, p=1)])
 def get_transform_v2():
     return alb.Compose([
         alb.RandomCrop(224, 244, p=1),
         alb.HorizontalFlip(p=0.5),
         alb.VerticalFlip(p=0.5),
     ])
+def get_transform_v2_512():
+    return alb.Compose([
+        alb.RandomCrop(448, 448, p=1),
+        alb.HorizontalFlip(p=0.5),
+        alb.VerticalFlip(p=0.5),
+    ])
+
 def get_transform_v3():
     return alb.Compose([
         alb.ShiftScaleRotate(shift_limit=0, scale_limit=0.1, rotate_limit=20, interpolation=cv2.INTER_AREA,

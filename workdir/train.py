@@ -9,7 +9,7 @@ import time
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import f1_score, precision_recall_fscore_support, log_loss
+from sklearn.metrics import f1_score, precision_recall_fscore_support, log_loss, average_precision_score
 import torch
 import torch.optim
 from torch.utils.data import DataLoader
@@ -31,14 +31,14 @@ def get_args():
     parser.add_argument("--apex", action='store_true', default=False, help="apex")
     parser.add_argument("--output", "-o", help="output path for validation")
     parser.add_argument("--snapshot", "-s", help="snapshot weight path")
-    parser.add_argument("--resume-from", help="snapshot to resume train")
+    # parser.add_argument("--resume-from", help="snapshot to resume train")
     return parser.parse_args()
 args = get_args()
 if args.apex:
     from apex import amp
 
 EXP_ID = os.path.splitext(os.path.basename(args.config))[0]
-SEED = 42
+SEED = 42 + 1
 DEVICE = "cuda"
 
 output_dir = Path("./output") / EXP_ID
@@ -56,7 +56,7 @@ def main():
     config["apex"] = args.apex
     config["output"] = args.output
     config["snapshot"] = args.snapshot
-    config["resume_from"] = args.resume_from
+    # config["resume_from"] = args.resume_from if args.resume_from
 
     utils.set_seed(SEED)
     device = torch.device(DEVICE)
@@ -93,7 +93,7 @@ def train(cfg, model):
         'score': 0.0,
         'epoch': -1,
     }
-    if cfg["resume_from"]:
+    if "resume_from" in cfg.keys() and cfg["resume_from"]:
         detail = utils.load_model(cfg["resume_from"], model, optim=optim)
         best.update({
             'loss': detail['loss'],
@@ -101,10 +101,10 @@ def train(cfg, model):
             'epoch': detail['epoch'],
         })
 
-    # # to set lr manually after resumed
-    # for param_group in optim.param_groups:
-    #     param_group['lr'] = 2e-4
-    # log(f"initial lr {utils.get_lr(optim)}")
+    # to set lr manually after resumed
+    for param_group in optim.param_groups:
+        param_group['lr'] = 5e-4
+    log(f"initial lr {utils.get_lr(optim)}")
 
     scheduler, is_reduce_lr = factory.get_scheduler(cfg, optim)
     log(f"is_reduce_lr: {is_reduce_lr}")
@@ -219,6 +219,7 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
 
         result.update(calc_acc(result['targets'], result['outputs'], KEYS))
         result.update(calc_f1(result['targets'], result['outputs'], KEYS))
+        result.update(calc_map(result['targets'], result['outputs'], KEYS))
         result.update(calc_logloss(result['targets'], result['outputs'], KEYS))
         if "pe_present_on_image" in KEYS:
             result.update(calc_logloss_weighted_present(result['targets'], result['outputs']))
@@ -253,6 +254,11 @@ def calc_f1(targets, outputs, keys):
         ret["pre_" + k] = pre
         ret["rec_" + k] = rec
         ret["f1_" + k] = f1
+    return ret
+def calc_map(targets, outputs, keys):
+    ret = {}
+    for k in keys:
+        ret["ap_" + k] = average_precision_score(np.round(targets[k]), outputs[k])
     return ret
 def calc_logloss(targets, outputs, keys):
     ret = {}

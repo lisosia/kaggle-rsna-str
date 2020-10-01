@@ -45,6 +45,45 @@ exp010(pe_presentのみinfer) に関しては epo0 << epo1
         　　　　　　　＝＝＝＞わかった。 image-level eval は pe_presentの量に Weightがある !  これが違いだと思われる
 　　　　　　　　　　　　　　　＝＞ POSITIVE-EXAMについてのみ, pe_presentが正確なら良い！！！！！！！！
 　　　　　　　　　　　　　　　　   　　ちなみに、しかもpos-portionが高いものは2乗で重要 (portion2倍だと, rowが2倍 & q_i が2倍)
+                                        portionが多い方が post-processで工夫しやすいはず (ex. gauss-ぼかしとか) なのでそちらも重要そう
+
+001
+[!] calib ＝＞ wegiht-logloss=0.2688
+
+010 
+pe_posも学習
+    ep0(LB悪かったやつ)   logloss_pe_present_weighted:0.4605        f1_pe_present_on_image:0.5822  logloss_pe_present_on_image:0.1129
+[!] calib ＝＞ weight-loglsos=0.2641
+
+030
+001と同じ. やりなおしただけ
+    ep0 logloss_pe_present_weighted:0.6336
+    ep1 logloss_pe_present_weighted:0.3405 
+    ep2 logloss_pe_present_weighted:0.4968
+031
+ovesample=4する  (randomCropのみ)
+    ep0: logloss_pe_present_weighted:0.4270
+    ep1: logloss_pe_present_weighted:0.5990
+[!] calibすると ?
+
+031___tune
+resume:exp001,ep1   
+get_transform_v2 ->   softlabel(eps,e-2), oversample=3, low-lr 2e-4, v,hhlip
+    ep1 logloss_pe_present_weighted:0.3584
+    ep2 logloss_pe_present_weighted:0.3255        f1_pe_present_on_image:0.6327  logloss_pe_present_on_image:0.1150
+    ep3 logloss_pe_present_weighted:0.4064
+    ep4 Overfitなので切り上げ
+    ★すこしゆっくりになった. 少し良くなったかもだが, タイミングだけの問題かも
+    ap_pe_present_on_image:0.6885
+[!] calib ＝＞ 0.26535   (factor=3.825)
+
+032 augv3
+    だめ. 年のため soflabelけす,lr戻してfinetuneしたがoverfitはさけれらない
+
+035 448サイズ(512)  ep0だけapex(ep1以降はnan発生したのでFP32)
+    ep1 ave_loss:0.090737 ap_pe_present_on_image:0.7751    f1_pe_present_on_image:0.6830
+    ep2 AP低下, loss上昇, したep3~切り上げ
+ep1 calib ＝＞ 0.2344 (factor=8.5550)
 
 #### indeterminate
 baseline:
