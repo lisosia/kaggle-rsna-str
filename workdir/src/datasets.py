@@ -70,7 +70,7 @@ def rawlabel_to_label_study_level(row) -> dict:
 
 class RsnaDataset(data.Dataset):
     """Image Level Dataset"""
-    def __init__(self, fold, phase, oversample=None):
+    def __init__(self, fold, phase, oversample=None, cutmix_prob=0.0):
         """
         oversample: 
             example num is... pe_present_portion(all)/pe_present_portion(pos_exam) ~= 3.3
@@ -78,6 +78,7 @@ class RsnaDataset(data.Dataset):
         """
         assert phase in ["train", "valid"]
         self.oversample = oversample if (oversample and phase=="train") else None
+        self.cutmix_prob = cutmix_prob
         self.phase = phase
         self.datafir = DATADIR
         # prepare df
@@ -109,6 +110,15 @@ class RsnaDataset(data.Dataset):
             return len(self.df)
 
     def __getitem__(self, idx: int):
+        if self.phase == "train" and np.random.rand() < self.cutmix_prob:
+            img1, y1,  sop1 = self.__getitem__wrap1(idx)
+            img2, y2, _sop2 = self.__getitem__wrap1(np.random.randint(self.__len__()))
+            new_img, new_y = transforms.cutmix(img1, img2, y1, y2)
+            return new_img, new_y, sop1
+        else:
+            return self.__getitem__wrap1(idx)
+
+    def __getitem__wrap1(self, idx: int):
         if self.oversample:
             if idx < len(self.df):
                 new_idx = idx
@@ -275,13 +285,13 @@ class RsnaDatasetTest2(data.Dataset):
         """df: one sop only"""
         self.df_all = df if df  else pd.read_csv(DATADIR / "test.csv")
         self.studies = self.df_all.StudyInstanceUID.unique()
-        self.transform = get_transform_valid_v1()
+        self.transform = get_transform_valid_v1_512()
 
     def __len__(self):
         return len(self.studies)
     
     def _trans(self, img):
-        return ((self.transform(image=hu_to_3wins(img))["image"]).astype(np.float32) / 255.).transpose(2,0,1)
+        return ((self.transform(image=hu_to_3wins(img, MAX_LENGTH=512))["image"]).astype(np.float32) / 255.).transpose(2,0,1)
 
     def __getitem__(self, idx: int):
         study_id = self.studies[idx]
@@ -293,10 +303,10 @@ class RsnaDatasetTest2(data.Dataset):
         return images, study_id, sop_arr
 
 
-def hu_to_3wins(image):
+def hu_to_3wins(image, MAX_LENGTH=256.):
     # 'jpg256' dataset is convert by this function
     # Windows from https://pubs.rsna.org/doi/pdf/10.1148/rg.245045008
-    MAX_LENGTH = 256.
+    
     image_lung = np.expand_dims(hu_to_windows(image, WL=-600, WW=1500), axis=-1)
     image_mediastinal = np.expand_dims(hu_to_windows(image, WL=40, WW=400), axis=-1)
     image_pe_specific = np.expand_dims(hu_to_windows(image, WL=100, WW=700), axis=-1)

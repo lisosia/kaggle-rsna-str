@@ -20,7 +20,7 @@ import src.utils as utils
 from src.utils import get_logger
 from src.criterion import ImgLoss
 from src.datasets import RsnaDatasetTest, RsnaDatasetTest2
-
+from src.postprocess import calib_p
 # from train import run_nn
 
 
@@ -32,7 +32,8 @@ def get_args():
     parser.add_argument("--skip", action='store_true', help="skip for commit-time infer")
     parser.add_argument("--validation", action='store_true', help="for validation")
     ### post process
-    parser.add_argument("--post1-percentile", required=True, type=float, help="postprocess1, percentile")
+    parser.add_argument("--post-pe-present-calib-factor", required=True, type=float, help="pe_present_on_image calibrtoin (only used for pe_present_on_image)")
+    parser.add_argument("--post1-percentile", required=True, type=float, help="postprocess1 of pe_present->exam_pos. used percentile")
     return parser.parse_args()
 args = get_args()
 
@@ -115,10 +116,10 @@ def main():
 
 
     # ### model 001 : image-level pred of pe_present_on_image
-    # model = ImgModel(archi="efficientnet_b0", pretrained=False).to(device)
+    model = ImgModel(archi="efficientnet_b0", pretrained=False).to(device)
     # result_pe = sub_2(None, model, args.weight_path)
     ### model 010: pe_present+right,left,center
-    model = ImgModelPE(archi="efficientnet_b0", pretrained=False).to(device)
+    # model = ImgModelPE(archi="efficientnet_b0", pretrained=False).to(device)
 
     log(f"Model type: {model.__class__.__name__}")
     result_pe = sub_3(None, model, args.weight_path)
@@ -130,7 +131,7 @@ def main():
 
         # pe_present_on_image
         for sop, pred in zip(res["ids"], res["outputs"]["pe_present_on_image"]):
-            df_sub.loc[sop, 'label'] = pred
+            df_sub.loc[sop, 'label'] = calib_p(pred, factor=args.post_pe_present_calib_factor)
 
         if DO_PE_POS_IEFER:
             # agg for right,left,center. pe_present-weighted average
@@ -233,10 +234,10 @@ def sub_3(cfg, model, weight_path):
     result_all = {}
     model = model.eval()
     dataset_sub  = RsnaDatasetTest2()
-    dataloader = DataLoader(dataset_sub, batch_size=1, shuffle=False, num_workers=3, collate_fn=lambda x:x)
+    dataloader = DataLoader(dataset_sub, batch_size=1, shuffle=False, num_workers=1, collate_fn=lambda x:x)
     for (item) in tqdm(dataloader):
         imgs, study_id, sop_arr = item[0]
-        _bs = 128
+        _bs = 64
         outputs_all = defaultdict(list)
         for i in np.arange(0, len(sop_arr), step=_bs):
             _imgs = torch.from_numpy(imgs[i: i+_bs]).cuda()
