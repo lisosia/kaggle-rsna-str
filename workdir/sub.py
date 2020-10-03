@@ -19,7 +19,7 @@ from src.models import get_img_model, ImgModelPE, ImgModel
 import src.utils as utils
 from src.utils import get_logger
 from src.criterion import ImgLoss
-from src.datasets import RsnaDatasetTest, RsnaDatasetTest2
+from src.datasets import RsnaDatasetTest, RsnaDatasetTest2, RsnaDatasetTest3
 from src.postprocess import calib_p
 # from train import run_nn
 
@@ -122,15 +122,15 @@ def main():
     # model = ImgModelPE(archi="efficientnet_b0", pretrained=False).to(device)
 
     log(f"Model type: {model.__class__.__name__}")
-    result_pe = sub_3(None, model, args.weight_path)
-    utils.save_pickle(result_pe, 'cache/010.pickle')
+    result_pe = sub_4(None, model, args.weight_path)
+    utils.save_pickle(result_pe, 'cache/xxx.pickle')
 
     for study in df_test.StudyInstanceUID.unique():
         res = result_pe[study]
         res_out = res["outputs"]
 
         # pe_present_on_image
-        for sop, pred in zip(res["ids"], res["outputs"]["pe_present_on_image"]):
+        for sop, pred in zip(res["ids"], res_out["pe_present_on_image"]):
             df_sub.loc[sop, 'label'] = calib_p(pred, factor=args.post_pe_present_calib_factor)
 
         if DO_PE_POS_IEFER:
@@ -146,9 +146,9 @@ def main():
 
         ### fill exam_type (negative, indeterminate, positive)
         # pos_exam_prob = np.power(np.mean(res["outputs"] ** 7), 1/7)
-        pos_exam_prob = np.percentile(res["outputs"]["pe_present_on_image"], q=args.post1_percentile)
+        pos_exam_prob = np.percentile(res_out["pe_present_on_image"], q=args.post1_percentile)
 
-        print("pos_exam_prob", pos_exam_prob, "max_pe_present_prob", np.max(res["outputs"]["pe_present_on_image"]))
+        print("pos_exam_prob", pos_exam_prob, "max_pe_present_prob", np.max(res_out["pe_present_on_image"]))
         # print("DEBUG:", study, pos_exam_prob, "RLC", ave_right, ave_left, ave_center)
 
         indeterminate_prob = _MEANS['indeterminate']  # from average
@@ -253,6 +253,54 @@ def sub_3(cfg, model, weight_path):
 
     print("per study result's keys(): ", result_all[study_id].keys())
     return result_all
+
+# almost same as sub_3. performance tuning and slightly difference return structure
+def sub_4(cfg, model, weight_path, is_local_valid=False):
+    """
+    Returns: 
+    result_all["study_id"] -> {
+        "outputs" -> {"col_name1" -> np.ndarray, "col_name2 -> np.ndarray}
+        "ids -> sop_id_arr
+    }
+    """
+    utils.load_model(weight_path, model)
+    model = model.eval()
+    dataset_sub  = RsnaDatasetTest3(is_local_valid)
+    dataloader = DataLoader(dataset_sub, batch_size=64, shuffle=False, num_workers=7)
+    outputs_all = defaultdict(list)
+    study_ids = []
+    sop_ids = []
+    debug_cnt = 0
+    for imgs, study_arr, sop_arr in tqdm(dataloader):
+        # import pdb; pdb.set_trace()
+        imgs = imgs.cuda()
+        with torch.no_grad():
+            outputs = model(imgs)
+        for _k in outputs.keys():  # iter over output keys:
+            outputs_all[_k].extend(torch.sigmoid(outputs[_k]).cpu().numpy())  # currently all output is binarty logit
+        study_ids.extend(study_arr)
+        sop_ids.extend(sop_arr)
+        if args.debug:
+            debug_cnt += 1 
+            if debug_cnt > 10: break
+
+    # gather results per study
+    all_output_keys = outputs_all.keys()
+    study_ids = np.array(study_ids)
+    sop_ids = np.array(sop_ids)
+    result_final = {}
+    for study in np.unique(study_ids):
+        indice = study_ids == study
+        sops = sop_ids[indice]
+        result_final[study] = {
+            "outputs": dict(
+                [(key, np.array(outputs_all[key])[indice]) for key in all_output_keys]
+            ),
+            "ids": sops
+        }
+
+    print("per study result's keys(): ", result_final[study].keys())
+    return result_final
 
 
 if __name__ == "__main__":

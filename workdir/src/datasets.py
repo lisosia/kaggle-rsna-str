@@ -303,6 +303,47 @@ class RsnaDatasetTest2(data.Dataset):
         return images, study_id, sop_arr
 
 
+class RsnaDatasetTest3(data.Dataset):
+    """Image level, All images"""
+    def __init__(self, is_local_valid=False):
+        """df: test.csv"""
+        self.df = pd.read_csv(DATADIR / "test.csv")
+        self.dir = '../input/rsna-str-pulmonary-embolism-detection/test/'
+        self.transform = get_transform_valid_v1_512()
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx: int):
+        sample = self.df.iloc[idx]
+        image = load_dicom(self.dir + '/' + sample.StudyInstanceUID + '/' + sample.SeriesInstanceUID + '/' + sample.SOPInstanceUID + '.dcm')
+        image = hu_to_3wins_fast_512(image)
+        image = self.transform(image=image)["image"]
+        image = (image.astype(np.float32) / 255).transpose(2,0,1)
+
+        return image, sample.StudyInstanceUID, sample.SOPInstanceUID  # image, dummy_label_dict, id
+
+
+# def hu_to_windows_fast(img, WL=50, WW=350):  # Causion! Slightly Difference Behaior
+#     upper, lower = WL+WW//2, WL-WW//2
+#     X = np.clip(img, lower, upper)
+#     X = (X - lower) / float(upper - lower)
+#     return X * 255.0
+def hu_to_3wins_fast_512(image):
+    MAX_LENGTH = 512
+    image_lung        = np.expand_dims(hu_to_windows(image, WL=-600, WW=1500), axis=-1)
+    image_mediastinal = np.expand_dims(hu_to_windows(image, WL=40, WW=400), axis=-1)
+    image_pe_specific = np.expand_dims(hu_to_windows(image, WL=100, WW=700), axis=-1)
+    image = np.concatenate([image_mediastinal, image_pe_specific, image_lung], axis=-1)
+    assert image.shape == (512, 512, 3)
+    _image_saved = image.copy()
+    rat = MAX_LENGTH / np.max(image.shape[1:])
+    image = zoom(image, [rat,rat,1.], prefilter=False, order=1)
+    assert ( _image_saved == image ).all()
+    return image
+
+
+
 def hu_to_3wins(image, MAX_LENGTH=256.):
     # 'jpg256' dataset is convert by this function
     # Windows from https://pubs.rsna.org/doi/pdf/10.1148/rg.245045008
@@ -330,6 +371,23 @@ def get_sorted_hu(df, folder='test'):
     dicom_files = list((d + df.SOPInstanceUID + '.dcm').unique())
     hu_images, sop_arr = load_dicom_array(dicom_files)
     return hu_images, sop_arr
+
+
+def load_dicom(dicom_file_path):
+    """return img (meda_data_dict)"""
+    d = pydicom.dcmread(dicom_file_path)
+    M = float(d.RescaleSlope)
+    B = float(d.RescaleIntercept)
+    try:
+        img = d.pixel_array
+    except:
+        print('image error ', d)
+        img = np.zeros(shape=(512,512))
+    img = img * M
+    img = img + B
+    return img
+    # return img, dict( [(e.keyword, e.value) for e in d.iterall()] )  # not used now. ignore
+
 
 def load_dicom_array(dicom_files):
     """z pos sorted dicom images and files"""
