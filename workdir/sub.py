@@ -266,7 +266,7 @@ def sub_4(cfg, model, weight_path, is_local_valid=False):
     utils.load_model(weight_path, model)
     model = model.eval()
     dataset_sub  = RsnaDatasetTest3(is_local_valid)
-    dataloader = DataLoader(dataset_sub, batch_size=64, shuffle=False, num_workers=7)
+    dataloader = DataLoader(dataset_sub, batch_size=64, shuffle=False, num_workers=2)
     outputs_all = defaultdict(list)
     study_ids = []
     sop_ids = []
