@@ -335,11 +335,11 @@ def hu_to_3wins_fast_512(image):
     image_mediastinal = np.expand_dims(hu_to_windows(image, WL=40, WW=400), axis=-1)
     image_pe_specific = np.expand_dims(hu_to_windows(image, WL=100, WW=700), axis=-1)
     image = np.concatenate([image_mediastinal, image_pe_specific, image_lung], axis=-1)
-    assert image.shape == (512, 512, 3)
-    _image_saved = image.copy()
+    # assert image.shape == (512, 512, 3)  # all ok for test/
+    # _image_saved = image.copy()
     rat = MAX_LENGTH / np.max(image.shape[1:])
     image = zoom(image, [rat,rat,1.], prefilter=False, order=1)
-    assert ( _image_saved == image ).all()
+    # assert ( _image_saved == image ).all()  # all ok for test/
     return image
 
 
