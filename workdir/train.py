@@ -74,6 +74,7 @@ def main():
 
 def valid(cfg, model):
     assert cfg["output"]
+    assert not os.path.exists(cfg["output"])
     criterion = factory.get_criterion(cfg)
     utils.load_model(cfg["snapshot"], model)
     loader_valid = factory.get_loader_valid(cfg)

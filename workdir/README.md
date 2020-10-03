@@ -85,6 +85,12 @@ get_transform_v2 ->   softlabel(eps,e-2), oversample=3, low-lr 2e-4, v,hhlip
     ep2 AP低下, loss上昇, したep3~切り上げ
 ep1 calib ＝＞ 0.2344 (factor=8.5550)
 
+036 cutmix 70%
+    ep3 ap_pe_present_on_image:0.7728  logloss_pe_present_on_image:0.0891  logloss_pe_present_weighted:0.2967
+ep3 calib ＝＞ 0.23926 (factor=4.37423)
+035ep1より少し悪い . Average-Precisionも少し悪いので指標として信頼できるかも
+
+
 #### indeterminate
 baseline:
    indeterminate単体. mean-prediction logloss => 0.099920  ※`p*log(p)+(1-p)*log(1-p)`

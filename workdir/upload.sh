@@ -2,9 +2,9 @@ set -xe
 
 DATANAME=rsna-src
 
-M1=output/010_pe_pos/fold0_ep0.pt
+M1=output/035_pe_present___448/fold0_ep1.pt
 
-COMMENT="[FOR PUBLIC ONLY]: exp010 pe_present only "
+COMMENT="[FOR PUBLIC ONLY]: exp035 sub, calip_p() for pe_present, perentile for exam_pos/neg, other is ave-filled"
 
 OUT=../input/$DATANAME/workdir.tar_
 rm $OUT
