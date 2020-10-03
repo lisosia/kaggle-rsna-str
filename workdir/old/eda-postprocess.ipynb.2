@@ -1,0 +1,286 @@
+{
+ "metadata": {
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.8.2-final"
+  },
+  "orig_nbformat": 2,
+  "kernelspec": {
+   "name": "python_defaultSpec_1601217427918",
+   "display_name": "Python 3.8.2 64-bit"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 2,
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Inspect postproces for pe_present_on_image -> pe_exam\n",
+    "\n",
+    "tested by exp010, fold0 validation"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pandas as pd\n",
+    "import pickle\n",
+    "import numpy as np\n",
+    "import matplotlib.pyplot as plt\n",
+    "\n",
+    "from src.factory import *\n",
+    "from src.utils import *"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "DATADIR = Path(\"../input/rsna-str-pulmonary-embolism-detection/\")\n",
+    "\n",
+    "train = pd.read_csv(DATADIR / \"train.csv\")\n",
+    "pre = pd.read_csv(DATADIR / \"split.csv\")\n",
+    "train = train.merge(pre, on=\"StudyInstanceUID\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "t = train[train.fold == 0]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 18,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "studies = t.StudyInstanceUID.unique()\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 33,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "agg = t.groupby(\"StudyInstanceUID\")[\"SOPInstanceUID\"].apply(list)\n",
+    "agg_one = t.groupby(\"StudyInstanceUID\").first()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 84,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def post1(p_arr, q=90):\n",
+    "    return np.percentile(p_arr, q=q)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 67,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from sklearn.metrics import log_loss"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 115,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "### exp 010\n",
+    "p = \"output/010_pe_pos/out.valid.fold0\"  # ep0\n",
+    "# p = \"output/010_pe_pos/out.valid.fold0_ep1\"\n",
+    "\n",
+    "res = load_pickle(p)\n",
+    "\n",
+    "raw_pred = pd.DataFrame({\n",
+    "    \"sop\": res[\"ids\"],\n",
+    "    \"pe_present\": res[\"outputs\"][\"pe_present_on_image\"]\n",
+    "})\n",
+    "raw_pred = raw_pred.set_index(\"sop\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 111,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# 001\n",
+    "_path = \"output/001_base/fold0_valid.pickle\"\n",
+    "res = load_pickle(_path)\n",
+    "raw_pred = pd.DataFrame({\n",
+    "    \"sop\": res[\"ids\"],\n",
+    "    \"pe_present\": res[\"outputs\"]\n",
+    "})\n",
+    "raw_pred = raw_pred.set_index(\"sop\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "\"\"\" exp 001 model (ep1)\n",
+    "q=90.00 logloss:0.4335881782152035\n",
+    "q=91.00 logloss:0.4261582133852183\n",
+    "q=92.00 logloss:0.41820680933855464\n",
+    "q=93.00 logloss:0.40965706920377787\n",
+    "q=94.00 logloss:0.40250102547323763\n",
+    "q=95.00 logloss:0.399617003382453   <=== たまたま Best\n",
+    "q=96.00 logloss:0.4014378415196566\n",
+    "q=97.00 logloss:0.40659142078878496\n",
+    "q=98.00 logloss:0.4293089602081556\n",
+    "q=99.00 logloss:0.4881203309768597\n",
+    "\"\"\""
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "\"\"\" exp 010 model (ep0)\n",
+    "q=90 logloss:0.580963053992852\n",
+    "q=91 logloss:0.5561516892147172\n",
+    "q=92 logloss:0.5302883445027334\n",
+    "q=93 logloss:0.5057102176781858\n",
+    "q=94 logloss:0.48133613115138896\n",
+    "q=95 logloss:0.4547570238934727   <=========== Bad\n",
+    "q=96 logloss:0.4293633715604374\n",
+    "q=97 logloss:0.40440298977917516\n",
+    "q=98 logloss:0.383646086091538\n",
+    "q=98.80 logloss:0.37546814335089845\n",
+    "q=98.90 logloss:0.3744332339894111   <=========== Mininum for fold0\n",
+    "q=99.00 logloss:0.3745150839621268\n",
+    "q=99 logloss:0.374515083962127\n",
+    "q=99.10 logloss:0.3755236864711825\n",
+    "q=99.20 logloss:0.3776048971290255\n",
+    "q=99.5 logloss:0.389937762524077\n",
+    "q=99.7 logloss:0.40671684673171016\n",
+    "q=99.9 logloss:0.43696034136869655\n",
+    "q=99.95 logloss:0.44722869414163663\n",
+    "q=99.99 logloss:0.4569151069554547\n",
+    "\"\"\""
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "\"\"\" exp 010 model (ep1)\n",
+    "q=90.00 logloss:0.5279595949554328\n",
+    "q=91.00 logloss:0.5052608242921037\n",
+    "q=92.00 logloss:0.4834110695747726\n",
+    "q=93.00 logloss:0.46385352130528656\n",
+    "q=94.00 logloss:0.4473139354706962\n",
+    "q=95.00 logloss:0.43102377556895444\n",
+    "q=96.00 logloss:0.41591824329556415\n",
+    "q=97.00 logloss:0.40408809195191403   <================ Best. epが進むほど最適なpercentilがさがる. epが進むとOver-confになるからだと思われる. exp001,best 0.3996\n",
+    "q=98.00 logloss:0.4081253578858078\n",
+    "q=99.00 logloss:0.4430865048629079\n",
+    "\"\"\""
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 116,
+   "metadata": {
+    "tags": []
+   },
+   "outputs": [
+    {
+     "output_type": "stream",
+     "name": "stdout",
+     "text": "q=98.50 logloss:0.3782279181914219\nq=98.60 logloss:0.3774932380182334\nq=98.70 logloss:0.3766140476251227\nq=98.80 logloss:0.37546814335089845\nq=98.90 logloss:0.3744332339894111\nq=99.00 logloss:0.3745150839621268\nq=99.10 logloss:0.3755236864711825\nq=99.20 logloss:0.3776048971290255\n"
+    }
+   ],
+   "source": [
+    "#for q in [97,97.5,98, 98.5,99,99.5]:\n",
+    "for q in np.arange(98.5, 99.3, 0.1):\n",
+    "#for q in np.arange(90.0, 99.9, 1):\n",
+    "\n",
+    "    LABELS = []\n",
+    "    PREDS = []\n",
+    "    for study in t.StudyInstanceUID.unique():\n",
+    "        sops = agg.loc[study]\n",
+    "        label = agg_one.loc[study]\n",
+    "        label_is_pe = int((not label.indeterminate) and (not label.negative_exam_for_pe))\n",
+    "        LABELS.append(label_is_pe)\n",
+    "\n",
+    "        probs_pe_present = raw_pred.loc[sops]\n",
+    "        pe_prob = post1(probs_pe_present, q=q)\n",
+    "        PREDS.append(pe_prob)\n",
+    "\n",
+    "        # print(study, label_is_pe, pe_prob)\n",
+    "\n",
+    "    print(f\"q={q:.2f} logloss:{log_loss(LABELS, PREDS)}\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 82,
+   "metadata": {},
+   "outputs": [
+    {
+     "output_type": "execute_result",
+     "data": {
+      "text/plain": "0.4547570238934727"
+     },
+     "metadata": {},
+     "execution_count": 82
+    }
+   ],
+   "source": [
+    "log_loss(LABELS, PREDS)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ]
+}
