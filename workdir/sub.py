@@ -19,7 +19,7 @@ from src.models import get_img_model, ImgModelPE, ImgModel
 import src.utils as utils
 from src.utils import get_logger
 from src.criterion import ImgLoss
-from src.datasets import RsnaDatasetTest, RsnaDatasetTest2, RsnaDatasetTest3
+from src.datasets import RsnaDatasetTest, RsnaDatasetTest2, RsnaDatasetTest3, RsnaDatasetTest3Valid
 from src.postprocess import calib_p
 # from train import run_nn
 
@@ -34,6 +34,7 @@ def get_args():
     ### post process
     parser.add_argument("--post-pe-present-calib-factor", required=True, type=float, help="pe_present_on_image calibrtoin (only used for pe_present_on_image)")
     parser.add_argument("--post1-percentile", required=True, type=float, help="postprocess1 of pe_present->exam_pos. used percentile")
+    parser.add_argument("--post1-calib-factor", required=True, type=float, help="postprocess1 of pe_present->exam_pos. calib factor")
     return parser.parse_args()
 args = get_args()
 
@@ -122,7 +123,7 @@ def main():
     # model = ImgModelPE(archi="efficientnet_b0", pretrained=False).to(device)
 
     log(f"Model type: {model.__class__.__name__}")
-    result_pe = sub_4(None, model, args.weight_path)
+    result_pe = sub_4(None, model, args.weight_path, valid_df=df_test if args.validation else None)
     utils.save_pickle(result_pe, 'cache/xxx.pickle')
 
     for study in df_test.StudyInstanceUID.unique():
@@ -146,7 +147,10 @@ def main():
 
         ### fill exam_type (negative, indeterminate, positive)
         # pos_exam_prob = np.power(np.mean(res["outputs"] ** 7), 1/7)
-        pos_exam_prob = np.percentile(res_out["pe_present_on_image"], q=args.post1_percentile)
+        pos_exam_prob = np.percentile(
+                calib_p( res_out["pe_present_on_image"], factor=args.post1_calib_factor),
+                q=args.post1_percentile
+            )
 
         print("pos_exam_prob", pos_exam_prob, "max_pe_present_prob", np.max(res_out["pe_present_on_image"]))
         # print("DEBUG:", study, pos_exam_prob, "RLC", ave_right, ave_left, ave_center)
@@ -255,7 +259,7 @@ def sub_3(cfg, model, weight_path):
     return result_all
 
 # almost same as sub_3. performance tuning and slightly difference return structure
-def sub_4(cfg, model, weight_path, is_local_valid=False):
+def sub_4(cfg, model, weight_path, valid_df=None):
     """
     Returns: 
     result_all["study_id"] -> {
@@ -265,7 +269,12 @@ def sub_4(cfg, model, weight_path, is_local_valid=False):
     """
     utils.load_model(weight_path, model)
     model = model.eval()
-    dataset_sub  = RsnaDatasetTest3(is_local_valid)
+    if valid_df is None:
+        dataset_sub  = RsnaDatasetTest3()
+    else:
+        print("prepare dataset for local validation")
+        dataset_sub  = RsnaDatasetTest3Valid(valid_df)
+
     dataloader = DataLoader(dataset_sub, batch_size=64, shuffle=False, num_workers=2)
     outputs_all = defaultdict(list)
     study_ids = []

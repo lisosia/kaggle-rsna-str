@@ -1,6 +1,7 @@
 epoch: 20
 n_grad_acc: 1
-resume_from: output/035_pe_present___448/fold0_ep0.pt
+# for fold0
+# resume_from: output/035_pe_present___448/fold0_ep0.pt
 
 # pe_present only model
 model:

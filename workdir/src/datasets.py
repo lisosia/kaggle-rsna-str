@@ -305,7 +305,7 @@ class RsnaDatasetTest2(data.Dataset):
 
 class RsnaDatasetTest3(data.Dataset):
     """Image level, All images"""
-    def __init__(self, is_local_valid=False):
+    def __init__(self):
         """df: test.csv"""
         self.df = pd.read_csv(DATADIR / "test.csv")
         self.dir = '../input/rsna-str-pulmonary-embolism-detection/test/'
@@ -318,6 +318,24 @@ class RsnaDatasetTest3(data.Dataset):
         sample = self.df.iloc[idx]
         image = load_dicom(self.dir + '/' + sample.StudyInstanceUID + '/' + sample.SeriesInstanceUID + '/' + sample.SOPInstanceUID + '.dcm')
         image = hu_to_3wins_fast_512(image)
+        image = self.transform(image=image)["image"]
+        image = (image.astype(np.float32) / 255).transpose(2,0,1)
+
+        return image, sample.StudyInstanceUID, sample.SOPInstanceUID  # image, dummy_label_dict, id
+
+class RsnaDatasetTest3Valid(data.Dataset):
+    """Image level, All images, for local validation"""
+    def __init__(self, df):
+        """df: test.csv"""
+        self.df = df
+        self.transform = get_transform_valid_v1_512()
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx: int):
+        sample = self.df.iloc[idx]
+        image = get_img_jpg512(sample)
         image = self.transform(image=image)["image"]
         image = (image.astype(np.float32) / 255).transpose(2,0,1)
 
