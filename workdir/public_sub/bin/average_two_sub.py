@@ -4,7 +4,7 @@ import sys
 import pandas as pd
 
 f1 = sys.argv[1]
-f2 = sys.argv[1]
+f2 = sys.argv[2]
 
 sub1 = pd.read_csv(f1)
 sub2 = pd.read_csv(f2)
