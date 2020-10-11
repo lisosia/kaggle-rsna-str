@@ -212,11 +212,11 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
         # SCORE_KEY = "logloss_indeterminate"
         # KEYS = ["indeterminate", "qa_contrast", "qa_motion"]
         # ### PE+pe_position
-        # SCORE_KEY = "logloss_pe_present_on_image"
-        # KEYS = ["pe_present_on_image"] + ["rightsided_pe", "leftsided_pe", "central_pe"]
-        ### PE+pe_type(acute/choronic)
         SCORE_KEY = "logloss_pe_present_on_image"
-        KEYS = ["pe_present_on_image"]   # + ["chronic_pe", "acute_and_chronic_pe"]  # + ["acute_pe"]
+        KEYS = ["pe_present_on_image"] + ["rightsided_pe", "leftsided_pe", "central_pe"]
+        ### PE+pe_type(acute/choronic)
+        # SCORE_KEY = "logloss_pe_present_on_image"
+        # KEYS = ["pe_present_on_image"]   # + ["chronic_pe", "acute_and_chronic_pe"]  # + ["acute_pe"]
 
         result.update(calc_acc(result['targets'], result['outputs'], KEYS))
         result.update(calc_f1(result['targets'], result['outputs'], KEYS))
@@ -230,7 +230,12 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
 
         # SHOW_KEYS = ["acc_indeterminate", "acc_qa_contrast", "acc_qa_motion"]
         SHOW_KEYS = [k for k in result.keys() if not k in ['ids', 'targets', 'outputs', 'loss']]
-        log(progress + ' '.join([k+':%.4f ' % result[k] for k in SHOW_KEYS]))
+        # log(progress + ' '.join([k+':%.4f ' % result[k] for k in SHOW_KEYS]))
+        _metric_str = ""
+        for index in range(0, len(SHOW_KEYS), len(KEYS)):
+            _metric_str += '    ' + ' '.join([k+':%.4f ' % result[k] for k in SHOW_KEYS[index:index+len(KEYS)]]) + '\n'
+        log(progress + "\n" + _metric_str)
+
         log('ave_loss:%.6f' % (result['loss']))
     else:
         log('')
@@ -255,7 +260,13 @@ def calc_f1(targets, outputs, keys):
         ret["pre_" + k] = pre
         ret["rec_" + k] = rec
         ret["f1_" + k] = f1
-    return ret
+    # keep same order as other metrics: pre_key1,pre_key2,... ,rec_key1,rec_key2,...
+    return {**{k:v for k,v in ret.items() if k.startswith("pre_")},
+            **{k:v for k,v in ret.items() if k.startswith("rec_")},
+            **{k:v for k,v in ret.items() if k.startswith("f1_" )},
+            }
+    # return ret
+
 def calc_map(targets, outputs, keys):
     ret = {}
     for k in keys:
