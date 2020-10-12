@@ -44,7 +44,7 @@ def rawlabel_to_label(row) -> dict:
     # if multi position has pe, each slice may have one individual pe (left or right or center)
     # so use soft-label.
     if ret["pe_present_on_image"] > 0.5 and (ret["rightsided_pe"]+ret["leftsided_pe"]+ret["central_pe"]) > 1:
-        EPS=0.1
+        EPS=0.01  # note: 85% of pos_exam is rightsided
         ret["rightsided_pe"] = np.clip(ret["rightsided_pe"], 0, 1-EPS)
         ret["leftsided_pe"] = np.clip(ret["leftsided_pe"], 0, 1-EPS)
         ret["central_pe"] = np.clip(ret["central_pe"], 0, 1-EPS)
@@ -135,8 +135,7 @@ class RsnaDataset(data.Dataset):
         # image
         # image = get_img_jpg256(sample)
         image = get_img_jpg512(sample)
-        if self.phase == "train":
-            image = self.transform(image=image)["image"]
+        image = self.transform(image=image)["image"]
         image = (image.astype(np.float32) / 255).transpose(2,0,1)
 
         return image, label, sample.SOPInstanceUID
@@ -231,7 +230,7 @@ def get_transform_v2():
 def get_transform_v2_512():
     return alb.Compose([
         alb.RandomCrop(448, 448, p=1),
-        alb.HorizontalFlip(p=0.5),
+        # alb.HorizontalFlip(p=0.5),
         alb.VerticalFlip(p=0.5),
     ])
 
