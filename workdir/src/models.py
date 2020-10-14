@@ -43,6 +43,17 @@ class ImgModelChronic(nn.Module):
         }
 
 
+class ImgModelRV(nn.Module):
+    def __init__(self, archi, pretrained=True):
+        super().__init__()
+        self.base = timm.create_model(archi, pretrained=pretrained, num_classes=1)
+    def forward(self, x):
+        x = self.base(x)
+        return {
+            "rv_lv_ratio_gte_1": x[:, 0],
+        }
+
+
 ## Indeterminate: 3ch image-level model
 ## 以下3点が主なTODO. acc をみつつ判断する
 # - 3D方向に見ないとqa_motion等は検知できない疑いがある

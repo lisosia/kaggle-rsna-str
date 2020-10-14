@@ -41,6 +41,16 @@ class ImgLossChronic(nn.Module):
         return total_loss
 
 
+class ImgLossRL(nn.Module):
+    """Img Level Predction Loss"""
+    def __init__(self):
+        super().__init__()
+        self.loss = nn.BCEWithLogitsLoss()
+    def forward(self, input, target):
+        # pdb.set_trace()
+        return self.loss(input["rv_lv_ratio_gte_1"], target["rv_lv_ratio_gte_1"].float())
+
+
 # Indeterminate loss (indeterminate+qa_constrast+qa_motion)
 class ImgLossInd(nn.Module):
     """Img Level Predction Loss"""
@@ -49,8 +59,8 @@ class ImgLossInd(nn.Module):
         self.loss = nn.BCEWithLogitsLoss()
     def forward(self, input, target):
         total_loss = \
-            2 * self.loss(input["indeterminate"], target["indeterminate"].float()) + \
-            1 * self.loss(input["qa_contrast"], target["qa_contrast"].float()) + \
-            1 * self.loss(input["qa_motion"], target["qa_motion"].float())
+            1./2 * self.loss(input["indeterminate"], target["indeterminate"].float()) + \
+            1./4 * self.loss(input["qa_contrast"], target["qa_contrast"].float()) + \
+            1./4 * self.loss(input["qa_motion"], target["qa_motion"].float())
         return total_loss
 
