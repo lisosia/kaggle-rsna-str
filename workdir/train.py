@@ -209,11 +209,14 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
     }
 
     if mode in ['train', 'valid']:
+        KEYS = list(result["outputs"].keys())
+        SCORE_KEY = "logloss_" + KEYS[0]
+        ### indeterminate
         # SCORE_KEY = "logloss_indeterminate"
         # KEYS = ["indeterminate", "qa_contrast", "qa_motion"]
         # ### PE+pe_position
-        SCORE_KEY = "logloss_pe_present_on_image"
-        KEYS = ["pe_present_on_image"] + ["rightsided_pe", "leftsided_pe", "central_pe"]
+        # SCORE_KEY = "logloss_pe_present_on_image"
+        # KEYS = ["pe_present_on_image"] + ["rightsided_pe", "leftsided_pe", "central_pe"]
         ### PE+pe_type(acute/choronic)
         # SCORE_KEY = "logloss_pe_present_on_image"
         # KEYS = ["pe_present_on_image"]   # + ["chronic_pe", "acute_and_chronic_pe"]  # + ["acute_pe"]
@@ -223,6 +226,7 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
         result.update(calc_map(result['targets'], result['outputs'], KEYS))
         result.update(calc_logloss(result['targets'], result['outputs'], KEYS))
         if "pe_present_on_image" in KEYS:
+            result.update(calc_map_dummy(result['targets'], result['outputs'], KEYS))  # debug
             result.update(calc_logloss_weighted_present(result['targets'], result['outputs']))
 
 
@@ -271,6 +275,11 @@ def calc_map(targets, outputs, keys):
     ret = {}
     for k in keys:
         ret["ap_" + k] = average_precision_score(np.round(targets[k]), outputs[k])
+    return ret
+def calc_map_dummy(targets, outputs, keys):  # use pe_present_on_image as prediction
+    ret = {}
+    for k in keys:
+        ret["ap_dummy" + k] = average_precision_score(np.round(targets[k]), outputs['pe_present_on_image'])
     return ret
 def calc_logloss(targets, outputs, keys):
     ret = {}
