@@ -230,7 +230,7 @@ def get_transform_v2():
 def get_transform_v2_512():
     return alb.Compose([
         alb.RandomCrop(448, 448, p=1),
-        # alb.HorizontalFlip(p=0.5),
+        alb.HorizontalFlip(p=0.5),
         alb.VerticalFlip(p=0.5),
     ])
 
