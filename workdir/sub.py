@@ -100,7 +100,7 @@ def one_study_user_stacking(preds_list, z_pos):
         one_study_test[f'pred{pred_n}'] = preds
     one_study_test['z_pos'] = z_pos
     for pred_n in range(len(preds_list)):
-        for i in range(1, 20):
+        for i in range(1, 10):
             one_study_test[f'pred{pred_n}_pre{i}'] = one_study_test[f'pred{pred_n}'].shift(i)
             one_study_test[f'pred{pred_n}_post{i}'] = one_study_test[f'pred{pred_n}'].shift(-i)
 
