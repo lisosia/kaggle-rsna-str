@@ -10,6 +10,9 @@ import pydicom
 from scipy.ndimage.interpolation import zoom
 from src.utils import timer
 import src.transforms as transforms
+from PIL import Image
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 DATADIR = Path("/kaggle/input/rsna-str-pulmonary-embolism-detection/")
 
@@ -70,9 +73,10 @@ def rawlabel_to_label_study_level(row) -> dict:
 
 class RsnaDataset(data.Dataset):
     """Image Level Dataset"""
-    def __init__(self, fold, phase, oversample=None, cutmix_prob=0.0):
+    def __init__(self, fold, phase, oversample=None, cutmix_prob=0.0,\
+        train_transform_str='get_transform_v2_512', val_transform_str='get_transform_valid_v1_512'):
         """
-        oversample: 
+        oversample:
             example num is... pe_present_portion(all)/pe_present_portion(pos_exam) ~= 3.3
             the metrics weights more for slices for high portion exam. so a little more big ratio may be better
         """
@@ -90,13 +94,17 @@ class RsnaDataset(data.Dataset):
         df = df.merge(df_prefix, on="SOPInstanceUID")  # img_prefix row
         if phase == "train":
             self.df = df[df.fold != fold]
-            # self.transform = get_transform_v1()
-            self.transform = get_transform_v2_512()
-            # self.transform = get_transform_v3()
+            if train_transform_str == 'get_transform_v2_512':
+                self.transform = get_transform_v2_512()
+            # self.transform = get_transform_another_crop_512()
+            # self.transform = get_transform_v2_512_exclude_crop()
             print("train dataset transform", self.transform)
         elif phase == "valid":
             self.df = df[df.fold == fold]
-            self.transform = get_transform_valid_v1_512()
+            if val_transform_str == 'get_transform_valid_v1_512':
+                self.transform = get_transform_valid_v1_512()
+            # self.transform = get_transform_valid_v1_512_exclude_crop()
+            # self.transform = get_transform_valid_another_crop_512()
         # self.df = self.df.iloc[:600]  # debug
         if self.oversample:
             assert isinstance(self.oversample, int) and self.oversample > 1  # sample positive `oversample` times
@@ -135,7 +143,8 @@ class RsnaDataset(data.Dataset):
         # image
         # image = get_img_jpg256(sample)
         image = get_img_jpg512(sample)
-        image = self.transform(image=image)["image"]
+        if self.transform is not None:
+            image = self.transform(image=image)["image"]
         image = (image.astype(np.float32) / 255).transpose(2,0,1)
 
         return image, label, sample.SOPInstanceUID
@@ -208,7 +217,12 @@ def get_img_jpg256(r):
     folder = DATADIR / "train-jpegs" / r["StudyInstanceUID"] / r["SeriesInstanceUID"]
     img_path = folder / ('{:04}_'.format(r["img_prefix"]) + r["SOPInstanceUID"] + ".jpg")
     return cv2.imread(str(img_path))
+
 def get_img_jpg512(r):
+    # for my data
+    # img_path = glob.glob(f"{DATADIR}/train_expt/{r['StudyInstanceUID']}/{r['SeriesInstanceUID']}/*{r['SOPInstanceUID']}.*")[0]
+    # return np.array(Image.open(img_path))
+
     folder = DATADIR / "train-jpegs-512"
     img_path = folder / (r["SOPInstanceUID"] + ".jpg")
     return cv2.imread(str(img_path))[:,:,::-1]
@@ -219,17 +233,36 @@ def get_transform_v1():
     ])
 def get_transform_valid_v1():
     return alb.Compose([alb.CenterCrop(224, 244, p=1)])
+
 def get_transform_valid_v1_512():
     return alb.Compose([alb.CenterCrop(448, 448, p=1)])
+
+def get_transform_valid_another_crop_512():
+   return alb.Compose([alb.Crop(12, 42, 500, 460, p=1.0)])
+
 def get_transform_v2():
     return alb.Compose([
         alb.RandomCrop(224, 244, p=1),
         alb.HorizontalFlip(p=0.5),
         alb.VerticalFlip(p=0.5),
     ])
+
 def get_transform_v2_512():
     return alb.Compose([
         alb.RandomCrop(448, 448, p=1),
+        alb.HorizontalFlip(p=0.5),
+        alb.VerticalFlip(p=0.5),
+    ])
+
+def get_transform_another_crop_512():
+    return alb.Compose([
+        alb.Crop(12, 42, 500, 460, p=1.0),
+        alb.HorizontalFlip(p=0.5),
+        alb.VerticalFlip(p=0.5),
+    ])
+
+def get_transform_v2_512_exclude_crop():
+    return alb.Compose([
         alb.HorizontalFlip(p=0.5),
         alb.VerticalFlip(p=0.5),
     ])
@@ -315,12 +348,13 @@ class RsnaDatasetTest3(data.Dataset):
 
     def __getitem__(self, idx: int):
         sample = self.df.iloc[idx]
-        image = load_dicom(self.dir + '/' + sample.StudyInstanceUID + '/' + sample.SeriesInstanceUID + '/' + sample.SOPInstanceUID + '.dcm')
+        image, z_pos = load_dicom(self.dir + '/' + sample.StudyInstanceUID + '/' + sample.SeriesInstanceUID + '/' + sample.SOPInstanceUID + '.dcm')
         image = hu_to_3wins_fast_512(image)
-        image = self.transform(image=image)["image"]
+        if self.transform is not None:
+            image = self.transform(image=image)["image"]
         image = (image.astype(np.float32) / 255).transpose(2,0,1)
 
-        return image, sample.StudyInstanceUID, sample.SOPInstanceUID  # image, dummy_label_dict, id
+        return image, sample.StudyInstanceUID, sample.SOPInstanceUID, z_pos  # image, dummy_label_dict, id
 
 class RsnaDatasetTest3Valid(data.Dataset):
     """Image level, All images, for local validation"""
@@ -402,7 +436,10 @@ def load_dicom(dicom_file_path):
         img = np.zeros(shape=(512,512))
     img = img * M
     img = img + B
-    return img
+
+    z_pos = float(d.ImagePositionPatient[-1])
+
+    return img, z_pos
     # return img, dict( [(e.keyword, e.value) for e in d.iterall()] )  # not used now. ignore
 
 

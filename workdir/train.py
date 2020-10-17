@@ -102,10 +102,10 @@ def train(cfg, model):
             'epoch': detail['epoch'],
         })
 
-    # to set lr manually after resumed
-    for param_group in optim.param_groups:
-        param_group['lr'] = 5e-4
-    log(f"initial lr {utils.get_lr(optim)}")
+        # to set lr manually after resumed
+        for param_group in optim.param_groups:
+            param_group['lr'] = cfg["optimizer"]["param"]["lr"]
+        log(f"initial lr {utils.get_lr(optim)}")
 
     scheduler, is_reduce_lr = factory.get_scheduler(cfg, optim)
     log(f"is_reduce_lr: {is_reduce_lr}")

@@ -91,6 +91,28 @@ def load_sub_filled_average():
 DO_PE_POS_IEFER = False
 print("=== DO_PE_POS_IEFER", DO_PE_POS_IEFER)
 
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+def one_study_user_stacking(preds_list, z_pos):
+    one_study_test = pd.DataFrame()
+    for pred_n, preds in enumerate(preds_list):
+        one_study_test[f'pred{pred_n}'] = preds
+    one_study_test['z_pos'] = z_pos
+    for pred_n in range(len(preds_list)):
+        for i in range(1, 20):
+            one_study_test[f'pred{pred_n}_pre{i}'] = one_study_test[f'pred{pred_n}'].shift(i)
+            one_study_test[f'pred{pred_n}_post{i}'] = one_study_test[f'pred{pred_n}'].shift(-i)
+
+    one_study_test[f'pre_z_pos_diff1'] = train['z_pos'] - train['z_pos'].shift(1)
+    one_study_test['z_pos_max'] = train.z_pos.max()
+    one_study_test['z_pos_norm'] = train['z_pos'] / one_study_test['z_pos_max']
+
+    test_preds = np.zeros(len(z_pos))
+    for model in models:
+        test_preds += model.predict(one_study_test) / 5
+    return sigmoid(test_preds)
+
 def main():
     utils.set_seed(SEED)
     device = torch.device(DEVICE)
@@ -133,6 +155,10 @@ def main():
         # pe_present_on_image
         for sop, pred in zip(res["ids"], res_out["pe_present_on_image"]):
             df_sub.loc[sop, 'label'] = calib_p(pred, factor=args.post_pe_present_calib_factor)
+
+        preds_list = []
+        preds_list.append(df_sub.label.values)
+        df_sub.label = one_study_user_stacking(preds_list, res['z_pos'])
 
         if DO_PE_POS_IEFER:
             # agg for right,left,center. pe_present-weighted average
@@ -279,8 +305,9 @@ def sub_4(cfg, model, weight_path, valid_df=None):
     outputs_all = defaultdict(list)
     study_ids = []
     sop_ids = []
+    z_positions = []
     debug_cnt = 0
-    for imgs, study_arr, sop_arr in tqdm(dataloader):
+    for imgs, study_arr, sop_arr, z_pos_arr in tqdm(dataloader):
         # import pdb; pdb.set_trace()
         imgs = imgs.cuda()
         with torch.no_grad():
@@ -289,28 +316,31 @@ def sub_4(cfg, model, weight_path, valid_df=None):
             outputs_all[_k].extend(torch.sigmoid(outputs[_k]).cpu().numpy())  # currently all output is binarty logit
         study_ids.extend(study_arr)
         sop_ids.extend(sop_arr)
+        z_positions.extend(z_pos_arr)
         if args.debug:
-            debug_cnt += 1 
+            debug_cnt += 1
             if debug_cnt > 10: break
 
     # gather results per study
     all_output_keys = outputs_all.keys()
     study_ids = np.array(study_ids)
     sop_ids = np.array(sop_ids)
+    z_positions = np.array(z_positions)
     result_final = {}
     for study in np.unique(study_ids):
         indice = study_ids == study
         sops = sop_ids[indice]
+        z_pos = z_positions[indice]
         result_final[study] = {
             "outputs": dict(
                 [(key, np.array(outputs_all[key])[indice]) for key in all_output_keys]
             ),
-            "ids": sops
+            "ids": sops,
+            'z_pos': z_pos
         }
 
     print("per study result's keys(): ", result_final[study].keys())
     return result_final
-
 
 if __name__ == "__main__":
     main()
