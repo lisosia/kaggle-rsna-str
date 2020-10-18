@@ -98,6 +98,9 @@ print("=== DO_PE_POS_IEFER", DO_PE_POS_IEFER)
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
+def inv_sigmoid(prob):
+    return np.log(prob/(1-prob))
+
 def one_study_user_stacking(ids, preds_list, z_pos, lgb_models, features):
     # 並び順の事故が怖いので一応idを使ってます
     one_study_test = pd.DataFrame(ids, columns=['id'])
@@ -128,6 +131,48 @@ def one_study_user_stacking(ids, preds_list, z_pos, lgb_models, features):
         test_preds += model.predict(one_study_test[features]) / 5
     one_study_test['stacking_pred'] = sigmoid(test_preds)
     return one_study_test.sort_index()
+
+
+def grouping(df):  # for pos_exam
+    grouped = pd.DataFrame(df.groupby('StudyInstanceUID')['pred'].mean())
+    grouped = grouped.rename(columns={'pred': 'mean'})
+    count = df.groupby('StudyInstanceUID')['pred'].count()
+    grouped['count_total'] = count
+
+    for i in range(1,10):
+        count = df[df.pred>i/10].groupby('StudyInstanceUID')['pred'].count()
+        grouped[f'count_over{i/10}'] = count
+        grouped[f'count_over{i/10}_ratio'] = count / grouped['count_total']
+
+    for q in [30, 50, 70, 80, 90, 95, 99]:
+        grouped[f'percentile{q}'] = df.groupby('StudyInstanceUID')['pred'].apply(lambda arr: np.percentile(arr, q))
+
+    ma = pd.DataFrame(df.groupby('StudyInstanceUID')['pred'].max())
+    grouped['max'] = ma.pred
+
+    grouped = grouped.reset_index().fillna(0)
+    return grouped
+
+def one_study_user_stacking_posexam(ids, preds_list, z_pos, lgb_models, features):
+    # 並び順の事故が怖いので一応idを使ってます
+    one_study_test = pd.DataFrame(ids, columns=['id'])
+    # for pred_n, preds in enumerate(preds_list):
+    #     one_study_test[f'pred{pred_n}'] = preds
+    one_study_test[f'pred'] = preds_list[0]
+    
+    one_study_test['StudyInstanceUID'] = '_dummy'
+    test_grouped = grouping(one_study_test)
+
+    if args.debug:
+        print("posexam stacking feature:", features)
+        print("posexam stacking input\n", test_grouped[features])
+
+    test_preds = np.zeros(1)
+    for model in lgb_models:
+        # posexam model, predict() returns probability
+        test_preds += inv_sigmoid( model.predict(test_grouped[features]) ) / len(lgb_models)
+    
+    return sigmoid(test_preds)[0]
 
 def main():
     utils.set_seed(SEED)
@@ -161,6 +206,9 @@ def main():
     lgb_models = [pickle.load(open(f'lgb_models/exp035_1018/lgb_seed0_fold{i}.pkl', 'rb')) for i in range(5)]
     features = ['pred0', 'pred0_post1', 'pred0_post2', 'pred0_post3', 'pred0_post4', 'pred0_post5', 'pred0_post6', 'pred0_post7', 'pred0_post8', 'pred0_post9', 'pred0_pre1', 'pred0_pre2', 'pred0_pre3', 'pred0_pre4', 'pred0_pre5', 'pred0_pre6', 'pred0_pre7', 'pred0_pre8', 'pred0_pre9', 'z_pos_norm']
 
+    lgb_models_posexam = [pickle.load(open(f'lgb_models/exp035_1018_posexam/lgb_seed0_fold{i}.pkl', 'rb')) for i in range(5)]
+    features_posexam = ['count_over0.1', 'count_over0.1_ratio', 'count_over0.2', 'count_over0.2_ratio', 'count_over0.3', 'count_over0.3_ratio', 'count_over0.4', 'count_over0.4_ratio', 'count_over0.5', 'count_over0.5_ratio', 'count_over0.6', 'count_over0.6_ratio', 'count_over0.7', 'count_over0.7_ratio', 'count_over0.8', 'count_over0.8_ratio', 'count_over0.9', 'count_over0.9_ratio', 'max', 'mean', 'percentile30', 'percentile50', 'percentile70', 'percentile80', 'percentile90', 'percentile95', 'percentile99']
+
     # result_pe = sub_2(None, model, args.weight_path)
     ### model 010: pe_present+right,left,center
     # model = ImgModelPE(archi="efficientnet_b0", pretrained=False).to(device)
@@ -184,6 +232,8 @@ def main():
         stacking_pred_df = one_study_user_stacking(res["ids"], preds_list, res['z_pos'], lgb_models, features)
         df_sub.loc[stacking_pred_df['id'], 'label'] = stacking_pred_df['stacking_pred'].values
 
+        stacking_pred_posexam = one_study_user_stacking_posexam(res["ids"], preds_list, res['z_pos'], lgb_models_posexam, features_posexam)
+
         if DO_PE_POS_IEFER:
             # agg for right,left,center. pe_present-weighted average
             # in real-labe, always, P(right) < P(pe_present)
@@ -195,19 +245,22 @@ def main():
             ave_center = np.clip( np.sum(res_out["central_pe"]   ) / pe_present_prob_sum, 0, 1)
             # postprocess like sqrt(p) may be good to push-up right/left/central probs for tackle half-right-slice,half-left-slice exam
 
-        ### fill exam_type (negative, indeterminate, positive)
-        # pos_exam_prob = np.power(np.mean(res["outputs"] ** 7), 1/7)
-        pos_exam_prob = np.percentile(
-                calib_p( res_out["pe_present_on_image"], factor=args.post1_calib_factor),
-                q=args.post1_percentile
-            )
-
-        print("pos_exam_prob", pos_exam_prob, "max_pe_present_prob", np.max(res_out["pe_present_on_image"]))
-        # print("DEBUG:", study, pos_exam_prob, "RLC", ave_right, ave_left, ave_center)
+        ### fill exam_type (negative, indeterminate, positive) ### 
 
         indeterminate_prob = _MEANS['indeterminate']  # from average
         df_sub.loc[study + '_' + 'indeterminate', 'label'] = indeterminate_prob
-        df_sub.loc[study + '_' + 'negative_exam_for_pe', 'label'] = (1 - indeterminate_prob) * (1 - pos_exam_prob)
+
+        if True:  # posexam stacking
+            pos_exam_prob = stacking_pred_posexam
+            df_sub.loc[study + '_' + 'negative_exam_for_pe', 'label'] = (1 - pos_exam_prob) * (4911) / (4911 + 157)
+        else:  # OLD
+            pos_exam_prob = np.percentile(
+                    calib_p( res_out["pe_present_on_image"], factor=args.post1_calib_factor),
+                    q=args.post1_percentile
+                )
+            print("pos_exam_prob", pos_exam_prob, "max_pe_present_prob", np.max(res_out["pe_present_on_image"]))
+            print("stacking_pred_posexam", stacking_pred_posexam)
+            df_sub.loc[study + '_' + 'negative_exam_for_pe', 'label'] = (1 - indeterminate_prob) * (1 - pos_exam_prob)
 
         ### fill right,left,central
         if DO_PE_POS_IEFER:
