@@ -14,7 +14,7 @@ from PIL import Image
 from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-DATADIR = Path("/kaggle/input/rsna-str-pulmonary-embolism-detection/")
+DATADIR = Path("../input/rsna-str-pulmonary-embolism-detection/")
 
 _EXAM_TYPES = ["negative", "indeterminate", "positive"]
 def _encode_exam_type(row): return _EXAM_TYPES.index(row["exam_type"])
@@ -147,7 +147,7 @@ class RsnaDataset(data.Dataset):
             image = self.transform(image=image)["image"]
         image = (image.astype(np.float32) / 255).transpose(2,0,1)
 
-        return image, label, sample.SOPInstanceUID
+        return image, label, sample.SOPInstanceUID, sample.weight
 
 
 class RsnaDataset3D(data.Dataset):
@@ -254,6 +254,13 @@ def get_transform_v2_512():
         alb.VerticalFlip(p=0.5),
     ])
 
+def get_transform_v3_512():
+    return alb.Compose([
+        alb.RandomCrop(448, 448, p=1),
+        alb.HorizontalFlip(p=0.5),
+        alb.VerticalFlip(p=0.5),
+    ])
+
 def get_transform_another_crop_512():
     return alb.Compose([
         alb.Crop(12, 42, 500, 460, p=1.0),
@@ -340,7 +347,7 @@ class RsnaDatasetTest3(data.Dataset):
     def __init__(self):
         """df: test.csv"""
         self.df = pd.read_csv(DATADIR / "test.csv")
-        self.dir = '../input/rsna-str-pulmonary-embolism-detection/test/'
+        self.dir = '/groups1/gca50041/kaggle-rsna-pe/test/'
         self.transform = get_transform_valid_v1_512()
 
     def __len__(self):

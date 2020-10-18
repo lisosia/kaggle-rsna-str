@@ -50,6 +50,8 @@ log(f'EXP {EXP_ID} start')
 
 def main():
     config = utils.load_config(args.config)
+    config["weighted"] = "weighted" in cfg.keys()
+
     # copy args to config
     config["mode"] = args.mode
     config["fold"] = args.fold
@@ -160,17 +162,23 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
     targets_all = defaultdict(list)
     outputs_all = defaultdict(list)
 
-    for i, (inputs, targets, ids) in enumerate(loader):
+    for i, (inputs, targets, ids, weights) in enumerate(loader):
 
         batch_size = len(inputs)
 
-        inputs = inputs.cuda()
+        inputs, weights = inputs.cuda(), weights.cuda()
         for k in targets.keys():
             targets[k] = targets[k].cuda()
         outputs = model(inputs)
 
         if mode in ['train', 'valid']:
-            loss = criterion(outputs, targets)
+            non_weight_losses = criterion(outputs, targets)
+            weights = weights * 2 # Set the average of the weight to 1
+
+            if not cfg['weighted']:
+                weights = 1
+
+            loss = torch.mean(non_weight_losses*weights)
             with torch.no_grad():
                 losses.append(loss.item())
 
@@ -183,7 +191,7 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
             if (i+1) % cfg["n_grad_acc"] == 0:
                 optim.step() # update
                 optim.zero_grad() # flush
-            
+
         with torch.no_grad():
             ids_all.extend(ids)
             for _k in outputs.keys():  # iter over output keys
