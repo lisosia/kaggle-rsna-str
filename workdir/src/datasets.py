@@ -147,7 +147,12 @@ class RsnaDataset(data.Dataset):
             image = self.transform(image=image)["image"]
         image = (image.astype(np.float32) / 255).transpose(2,0,1)
 
-        return image, label, sample.SOPInstanceUID, sample.weight
+        if 'weight' in sample:
+            weight = sample.weight
+        else:
+            weight = 1 # dfにカラムがない場合
+
+        return image, label, sample.SOPInstanceUID, weight
 
 
 class RsnaDataset3D(data.Dataset):
@@ -220,7 +225,7 @@ def get_img_jpg256(r):
 
 def get_img_jpg512(r):
     # for my data
-    # img_path = glob.glob(f"{DATADIR}/train_expt/{r['StudyInstanceUID']}/{r['SeriesInstanceUID']}/*{r['SOPInstanceUID']}.*")[0]
+    # img_path = glob.glob(f"/groups1/gca50041/ariyasu/train_expt/{r['StudyInstanceUID']}/{r['SeriesInstanceUID']}/*{r['SOPInstanceUID']}.*")[0]
     # return np.array(Image.open(img_path))
 
     folder = DATADIR / "train-jpegs-512"
@@ -347,7 +352,8 @@ class RsnaDatasetTest3(data.Dataset):
     def __init__(self):
         """df: test.csv"""
         self.df = pd.read_csv(DATADIR / "test.csv")
-        self.dir = '/groups1/gca50041/kaggle-rsna-pe/test/'
+        # self.dir = '/groups1/gca50041/kaggle-rsna-pe/test/'
+        self.dir = '../input/rsna-str-pulmonary-embolism-detection/test/'
         self.transform = get_transform_valid_v1_512()
 
     def __len__(self):

@@ -50,7 +50,7 @@ log(f'EXP {EXP_ID} start')
 
 def main():
     config = utils.load_config(args.config)
-    config["weighted"] = "weighted" in cfg.keys()
+    config["weighted"] = "weighted" in config.keys()
 
     # copy args to config
     config["mode"] = args.mode
@@ -70,15 +70,18 @@ def main():
     log(f"Model type: {model.__class__.__name__}")
     if config["mode"] == 'train':
         train(config, model)
-    elif config["mode"] == 'valid':
-        valid(config, model)
+    valid(config, model)
 
 
 def valid(cfg, model):
     assert cfg["output"]
     assert not os.path.exists(cfg["output"])
     criterion = factory.get_criterion(cfg)
-    utils.load_model(cfg["snapshot"], model)
+
+    path = os.path.join(output_dir, 'fold%d_best.pt' % (cfg['fold']))
+    print(f'best path: {str(path)}')
+    utils.load_model(str(path), model)
+
     loader_valid = factory.get_loader_valid(cfg)
     with torch.no_grad():
         results = run_nn(cfg, 'valid', model, loader_valid, criterion=criterion)
@@ -138,6 +141,7 @@ def train(cfg, model):
         }
         if val['loss'] <= best['loss']:
             best.update(detail)
+            utils.save_model(model, optim, detail, cfg["fold"], output_dir, best=True)
 
         utils.save_model(model, optim, detail, cfg["fold"], output_dir)
 
@@ -149,6 +153,7 @@ def train(cfg, model):
             scheduler.step()
 
 def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None, apex=None):
+    print('weighted:', cfg['weighted'])
     if mode in ['train']:
         model.train()
     elif mode in ['valid', 'test']:

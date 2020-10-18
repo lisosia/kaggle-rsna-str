@@ -78,8 +78,11 @@ def load_config(path: str):
     return config
 
 
-def save_model(model, optim, detail, fold, dirname):
-    path = os.path.join(dirname, 'fold%d_ep%d.pt' % (fold, detail['epoch']))
+def save_model(model, optim, detail, fold, dirname, best=False):
+    if best:
+        path = os.path.join(dirname, 'fold%d_best.pt' % (fold))
+    else:
+        path = os.path.join(dirname, 'fold%d_ep%d.pt' % (fold, detail['epoch']))
     torch.save({
         'model': model.state_dict(),
         'optim': optim.state_dict(),
