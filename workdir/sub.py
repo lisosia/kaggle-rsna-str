@@ -43,8 +43,8 @@ DEVICE = "cuda"
 def log(msg): print(msg)
 def log_w(msg): print(msg)
 
+DATADIR = Path("../input/rsna-str-pulmonary-embolism-detection/")
 
-DATADIR = Path("/kaggle/input/rsna-str-pulmonary-embolism-detection/")
 _MEANS = {
     'pe_present_on_image': 0.053915069524414806,
     'negative_exam_for_pe': 0.6763928618101033,
@@ -91,6 +91,32 @@ def load_sub_filled_average():
 DO_PE_POS_IEFER = False
 print("=== DO_PE_POS_IEFER", DO_PE_POS_IEFER)
 
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+def one_study_user_stacking(ids, preds_list, z_pos, lgb_models):
+    # 並び順の事故が怖いので一応idを使ってます
+    one_study_test = pd.DataFrame(ids, columns=['id'])
+    for pred_n, preds in enumerate(preds_list):
+        one_study_test[f'pred{pred_n}'] = preds
+    one_study_test['z_pos'] = z_pos
+    one_study_test = one_study_test.sort_values('z_pos')
+    for pred_n in range(len(preds_list)):
+        for i in range(1, 10):
+            one_study_test[f'pred{pred_n}_pre{i}'] = one_study_test[f'pred{pred_n}'].shift(i)
+            one_study_test[f'pred{pred_n}_post{i}'] = one_study_test[f'pred{pred_n}'].shift(-i)
+
+    one_study_test[f'pre_z_pos_diff1'] = one_study_test['z_pos'] - one_study_test['z_pos'].shift(1)
+    one_study_test['z_pos_max'] = one_study_test.z_pos.max()
+    one_study_test['z_pos_norm'] = one_study_test['z_pos'] / one_study_test['z_pos_max']
+
+    test_preds = np.zeros(len(z_pos))
+    features = list(set(list(one_study_test)) - set(['id']))
+    for model in lgb_models:
+        test_preds += model.predict(one_study_test[features]) / 5
+    one_study_test['stacking_pred'] = sigmoid(test_preds)
+    return one_study_test.sort_index()
+
 def main():
     utils.set_seed(SEED)
     device = torch.device(DEVICE)
@@ -117,7 +143,10 @@ def main():
 
 
     # ### model 001 : image-level pred of pe_present_on_image
-    model = ImgModel(archi="efficientnet_b0", pretrained=False).to(device)
+    model = ImgModel(archi="efficientnet_b3", pretrained=False).to(device)
+
+    lgb_models = [pickle.load(open(f'lgb_models/lgb_fold{i}.pkl', 'rb')) for i in range(5)]
+
     # result_pe = sub_2(None, model, args.weight_path)
     ### model 010: pe_present+right,left,center
     # model = ImgModelPE(archi="efficientnet_b0", pretrained=False).to(device)
@@ -133,6 +162,11 @@ def main():
         # pe_present_on_image
         for sop, pred in zip(res["ids"], res_out["pe_present_on_image"]):
             df_sub.loc[sop, 'label'] = calib_p(pred, factor=args.post_pe_present_calib_factor)
+
+        preds_list = []
+        preds_list.append(res_out["pe_present_on_image"])
+        stacking_pred_df = one_study_user_stacking(res["ids"], preds_list, res['z_pos'], lgb_models)
+        df_sub.loc[stacking_pred_df['id'], 'label'] = stacking_pred_df['stacking_pred']
 
         if DO_PE_POS_IEFER:
             # agg for right,left,center. pe_present-weighted average
@@ -279,38 +313,43 @@ def sub_4(cfg, model, weight_path, valid_df=None):
     outputs_all = defaultdict(list)
     study_ids = []
     sop_ids = []
+    z_positions = []
     debug_cnt = 0
-    for imgs, study_arr, sop_arr in tqdm(dataloader):
+    for imgs, study_arr, sop_arr, z_pos_arr in tqdm(dataloader):
         # import pdb; pdb.set_trace()
         imgs = imgs.cuda()
         with torch.no_grad():
-            outputs = model(imgs)
+            for i in range(10): # simulate 10 models
+                outputs = model(imgs)
         for _k in outputs.keys():  # iter over output keys:
             outputs_all[_k].extend(torch.sigmoid(outputs[_k]).cpu().numpy())  # currently all output is binarty logit
         study_ids.extend(study_arr)
         sop_ids.extend(sop_arr)
+        z_positions.extend(z_pos_arr)
         if args.debug:
-            debug_cnt += 1 
+            debug_cnt += 1
             if debug_cnt > 10: break
 
     # gather results per study
     all_output_keys = outputs_all.keys()
     study_ids = np.array(study_ids)
     sop_ids = np.array(sop_ids)
+    z_positions = np.array(z_positions)
     result_final = {}
     for study in np.unique(study_ids):
         indice = study_ids == study
         sops = sop_ids[indice]
+        z_pos = z_positions[indice]
         result_final[study] = {
             "outputs": dict(
                 [(key, np.array(outputs_all[key])[indice]) for key in all_output_keys]
             ),
-            "ids": sops
+            "ids": sops,
+            'z_pos': z_pos
         }
 
     print("per study result's keys(): ", result_final[study].keys())
     return result_final
-
 
 if __name__ == "__main__":
     main()

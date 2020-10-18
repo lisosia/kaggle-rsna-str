@@ -50,6 +50,8 @@ log(f'EXP {EXP_ID} start')
 
 def main():
     config = utils.load_config(args.config)
+    config["weighted"] = "weighted" in config.keys()
+
     # copy args to config
     config["mode"] = args.mode
     config["fold"] = args.fold
@@ -68,15 +70,18 @@ def main():
     log(f"Model type: {model.__class__.__name__}")
     if config["mode"] == 'train':
         train(config, model)
-    elif config["mode"] == 'valid':
-        valid(config, model)
+    valid(config, model)
 
 
 def valid(cfg, model):
     assert cfg["output"]
     assert not os.path.exists(cfg["output"])
     criterion = factory.get_criterion(cfg)
-    utils.load_model(cfg["snapshot"], model)
+
+    path = os.path.join(output_dir, 'fold%d_best.pt' % (cfg['fold']))
+    print(f'best path: {str(path)}')
+    utils.load_model(str(path), model)
+
     loader_valid = factory.get_loader_valid(cfg)
     with torch.no_grad():
         results = run_nn(cfg, 'valid', model, loader_valid, criterion=criterion)
@@ -102,10 +107,10 @@ def train(cfg, model):
             'epoch': detail['epoch'],
         })
 
-    # to set lr manually after resumed
-    for param_group in optim.param_groups:
-        param_group['lr'] = 5e-4
-    log(f"initial lr {utils.get_lr(optim)}")
+        # to set lr manually after resumed
+        for param_group in optim.param_groups:
+            param_group['lr'] = cfg["optimizer"]["param"]["lr"]
+        log(f"initial lr {utils.get_lr(optim)}")
 
     scheduler, is_reduce_lr = factory.get_scheduler(cfg, optim)
     log(f"is_reduce_lr: {is_reduce_lr}")
@@ -136,6 +141,7 @@ def train(cfg, model):
         }
         if val['loss'] <= best['loss']:
             best.update(detail)
+            utils.save_model(model, optim, detail, cfg["fold"], output_dir, best=True)
 
         utils.save_model(model, optim, detail, cfg["fold"], output_dir)
 
@@ -147,6 +153,7 @@ def train(cfg, model):
             scheduler.step()
 
 def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None, apex=None):
+    print('weighted:', cfg['weighted'])
     if mode in ['train']:
         model.train()
     elif mode in ['valid', 'test']:
@@ -160,17 +167,23 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
     targets_all = defaultdict(list)
     outputs_all = defaultdict(list)
 
-    for i, (inputs, targets, ids) in enumerate(loader):
+    for i, (inputs, targets, ids, weights) in enumerate(loader):
 
         batch_size = len(inputs)
 
-        inputs = inputs.cuda()
+        inputs, weights = inputs.cuda(), weights.cuda()
         for k in targets.keys():
             targets[k] = targets[k].cuda()
         outputs = model(inputs)
 
         if mode in ['train', 'valid']:
-            loss = criterion(outputs, targets)
+            non_weight_losses = criterion(outputs, targets)
+            weights = weights * 2 # Set the average of the weight to 1
+
+            if not cfg['weighted']:
+                weights = 1
+
+            loss = torch.mean(non_weight_losses*weights)
             with torch.no_grad():
                 losses.append(loss.item())
 
@@ -183,7 +196,7 @@ def run_nn(cfg, mode, model, loader, criterion=None, optim=None, scheduler=None,
             if (i+1) % cfg["n_grad_acc"] == 0:
                 optim.step() # update
                 optim.zero_grad() # flush
-            
+
         with torch.no_grad():
             ids_all.extend(ids)
             for _k in outputs.keys():  # iter over output keys
