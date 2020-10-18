@@ -23,6 +23,10 @@ from src.datasets import RsnaDatasetTest, RsnaDatasetTest2, RsnaDatasetTest3, Rs
 from src.postprocess import calib_p
 # from train import run_nn
 
+# fix issue: "received 0 items of ancdata"
+# https://github.com/pytorch/pytorch/issues/973#issuecomment-346405667
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -94,7 +98,7 @@ print("=== DO_PE_POS_IEFER", DO_PE_POS_IEFER)
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-def one_study_user_stacking(ids, preds_list, z_pos, lgb_models):
+def one_study_user_stacking(ids, preds_list, z_pos, lgb_models, features):
     # 並び順の事故が怖いので一応idを使ってます
     one_study_test = pd.DataFrame(ids, columns=['id'])
     for pred_n, preds in enumerate(preds_list):
@@ -106,12 +110,20 @@ def one_study_user_stacking(ids, preds_list, z_pos, lgb_models):
             one_study_test[f'pred{pred_n}_pre{i}'] = one_study_test[f'pred{pred_n}'].shift(i)
             one_study_test[f'pred{pred_n}_post{i}'] = one_study_test[f'pred{pred_n}'].shift(-i)
 
-    one_study_test[f'pre_z_pos_diff1'] = one_study_test['z_pos'] - one_study_test['z_pos'].shift(1)
-    one_study_test['z_pos_max'] = one_study_test.z_pos.max()
-    one_study_test['z_pos_norm'] = one_study_test['z_pos'] / one_study_test['z_pos_max']
+    # not used now
+    # one_study_test[f'pre_z_pos_diff1'] = one_study_test['z_pos'] - one_study_test['z_pos'].shift(1)
+
+    z_pos_max = one_study_test.z_pos.max()
+    z_pos_min = one_study_test.z_pos.min()
+    one_study_test['z_pos_norm'] = (one_study_test['z_pos'] - z_pos_min) / (z_pos_max - z_pos_min)
 
     test_preds = np.zeros(len(z_pos))
-    features = list(set(list(one_study_test)) - set(['id']))
+    ### features = list(set(list(one_study_test)) - set(['id', 'z_pos']))
+
+    if args.debug:
+        print("stacking feature:", features)
+        print("stacking input\n", one_study_test[features])
+
     for model in lgb_models:
         test_preds += model.predict(one_study_test[features]) / 5
     one_study_test['stacking_pred'] = sigmoid(test_preds)
@@ -143,9 +155,11 @@ def main():
 
 
     # ### model 001 : image-level pred of pe_present_on_image
-    model = ImgModel(archi="efficientnet_b3", pretrained=False).to(device)
+    model = ImgModel(archi="efficientnet_b0", pretrained=False).to(device)
 
-    lgb_models = [pickle.load(open(f'lgb_models/lgb_fold{i}.pkl', 'rb')) for i in range(5)]
+    # lgb_models = [pickle.load(open(f'lgb_models/lgb_fold{i}.pkl', 'rb')) for i in range(5)]
+    lgb_models = [pickle.load(open(f'lgb_models/exp035_1018/lgb_seed0_fold{i}.pkl', 'rb')) for i in range(5)]
+    features = ['pred0', 'pred0_post1', 'pred0_post2', 'pred0_post3', 'pred0_post4', 'pred0_post5', 'pred0_post6', 'pred0_post7', 'pred0_post8', 'pred0_post9', 'pred0_pre1', 'pred0_pre2', 'pred0_pre3', 'pred0_pre4', 'pred0_pre5', 'pred0_pre6', 'pred0_pre7', 'pred0_pre8', 'pred0_pre9', 'z_pos_norm']
 
     # result_pe = sub_2(None, model, args.weight_path)
     ### model 010: pe_present+right,left,center
@@ -164,9 +178,11 @@ def main():
             df_sub.loc[sop, 'label'] = calib_p(pred, factor=args.post_pe_present_calib_factor)
 
         preds_list = []
-        preds_list.append(res_out["pe_present_on_image"])
-        stacking_pred_df = one_study_user_stacking(res["ids"], preds_list, res['z_pos'], lgb_models)
-        df_sub.loc[stacking_pred_df['id'], 'label'] = stacking_pred_df['stacking_pred']
+        preds_list.append(
+                calib_p( res_out["pe_present_on_image"], factor=5.72045 )  # TODO: calib for each fold
+            )
+        stacking_pred_df = one_study_user_stacking(res["ids"], preds_list, res['z_pos'], lgb_models, features)
+        df_sub.loc[stacking_pred_df['id'], 'label'] = stacking_pred_df['stacking_pred'].values
 
         if DO_PE_POS_IEFER:
             # agg for right,left,center. pe_present-weighted average
@@ -319,7 +335,8 @@ def sub_4(cfg, model, weight_path, valid_df=None):
         # import pdb; pdb.set_trace()
         imgs = imgs.cuda()
         with torch.no_grad():
-            for i in range(10): # simulate 10 models
+            # for i in range(10): # simulate 10 models
+            for i in range(1):  # TODO do multi model inference
                 outputs = model(imgs)
         for _k in outputs.keys():  # iter over output keys:
             outputs_all[_k].extend(torch.sigmoid(outputs[_k]).cpu().numpy())  # currently all output is binarty logit
@@ -328,7 +345,7 @@ def sub_4(cfg, model, weight_path, valid_df=None):
         z_positions.extend(z_pos_arr)
         if args.debug:
             debug_cnt += 1
-            if debug_cnt > 10: break
+            if debug_cnt > 6: break
 
     # gather results per study
     all_output_keys = outputs_all.keys()

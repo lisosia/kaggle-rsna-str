@@ -621,24 +621,10 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 20,
+   "execution_count": null,
    "metadata": {},
-   "outputs": [
-    {
-     "output_type": "error",
-     "ename": "RuntimeError",
-     "evalue": "No active exception to reraise",
-     "traceback": [
-      "\u001b[0;31m---------------------------------------------------------------------------\u001b[0m",
-      "\u001b[0;31mRuntimeError\u001b[0m                              Traceback (most recent call last)",
-      "\u001b[0;32m<ipython-input-20-01be21e57880>\u001b[0m in \u001b[0;36m<module>\u001b[0;34m\u001b[0m\n\u001b[0;32m----> 1\u001b[0;31m \u001b[0;32mraise\u001b[0m\u001b[0;34m\u001b[0m\u001b[0;34m\u001b[0m\u001b[0m\n\u001b[0m",
-      "\u001b[0;31mRuntimeError\u001b[0m: No active exception to reraise"
-     ]
-    }
-   ],
-   "source": [
-    "raise "
-   ]
+   "outputs": [],
+   "source": []
   },
   {
    "cell_type": "markdown",
@@ -682,7 +668,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 22,
+   "execution_count": 34,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -716,7 +702,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 23,
+   "execution_count": 35,
    "metadata": {},
    "outputs": [
     {
@@ -806,7 +792,7 @@
       "text/html": "<div>\n<style scoped>\n    .dataframe tbody tr th:only-of-type {\n        vertical-align: middle;\n    }\n\n    .dataframe tbody tr th {\n        vertical-align: top;\n    }\n\n    .dataframe thead th {\n        text-align: right;\n    }\n</style>\n<table border=\"1\" class=\"dataframe\">\n  <thead>\n    <tr style=\"text-align: right;\">\n      <th></th>\n      <th>StudyInstanceUID</th>\n      <th>mean</th>\n      <th>count_total</th>\n      <th>count_over0.1</th>\n      <th>count_over0.1_ratio</th>\n      <th>count_over0.2</th>\n      <th>count_over0.2_ratio</th>\n      <th>count_over0.3</th>\n      <th>count_over0.3_ratio</th>\n      <th>count_over0.4</th>\n      <th>...</th>\n      <th>count_over0.8</th>\n      <th>count_over0.8_ratio</th>\n      <th>count_over0.9</th>\n      <th>count_over0.9_ratio</th>\n      <th>count_1</th>\n      <th>count_1_ratio</th>\n      <th>max</th>\n      <th>fold</th>\n      <th>negative_exam_for_pe</th>\n      <th>positive_exam_for_pe</th>\n    </tr>\n  </thead>\n  <tbody>\n    <tr>\n      <th>200</th>\n      <td>06d146ecc3a7</td>\n      <td>0.047192</td>\n      <td>193</td>\n      <td>29.0</td>\n      <td>0.150259</td>\n      <td>10.0</td>\n      <td>0.051813</td>\n      <td>2.0</td>\n      <td>0.010363</td>\n      <td>0.0</td>\n      <td>...</td>\n      <td>0.0</td>\n      <td>0.000000</td>\n      <td>0.0</td>\n      <td>0.000000</td>\n      <td>0.0</td>\n      <td>0.0</td>\n      <td>0.399029</td>\n      <td>2</td>\n      <td>1</td>\n      <td>0</td>\n    </tr>\n    <tr>\n      <th>201</th>\n      <td>06d836b00752</td>\n      <td>0.146712</td>\n      <td>239</td>\n      <td>72.0</td>\n      <td>0.301255</td>\n      <td>41.0</td>\n      <td>0.171548</td>\n      <td>26.0</td>\n      <td>0.108787</td>\n      <td>25.0</td>\n      <td>...</td>\n      <td>20.0</td>\n      <td>0.083682</td>\n      <td>18.0</td>\n      <td>0.075314</td>\n      <td>0.0</td>\n      <td>0.0</td>\n      <td>0.990752</td>\n      <td>3</td>\n      <td>0</td>\n      <td>1</td>\n    </tr>\n    <tr>\n      <th>202</th>\n      <td>06e70cd10c06</td>\n      <td>0.066696</td>\n      <td>188</td>\n      <td>41.0</td>\n      <td>0.218085</td>\n      <td>23.0</td>\n      <td>0.122340</td>\n      <td>10.0</td>\n      <td>0.053191</td>\n      <td>5.0</td>\n      <td>...</td>\n      <td>0.0</td>\n      <td>0.000000</td>\n      <td>0.0</td>\n      <td>0.000000</td>\n      <td>0.0</td>\n      <td>0.0</td>\n      <td>0.615208</td>\n      <td>3</td>\n      <td>1</td>\n      <td>0</td>\n    </tr>\n    <tr>\n      <th>203</th>\n      <td>06ec73a6abf3</td>\n      <td>0.072169</td>\n      <td>219</td>\n      <td>51.0</td>\n      <td>0.232877</td>\n      <td>21.0</td>\n      <td>0.095890</td>\n      <td>14.0</td>\n      <td>0.063927</td>\n      <td>8.0</td>\n      <td>...</td>\n      <td>1.0</td>\n      <td>0.004566</td>\n      <td>1.0</td>\n      <td>0.004566</td>\n      <td>0.0</td>\n      <td>0.0</td>\n      <td>0.923399</td>\n      <td>2</td>\n      <td>1</td>\n      <td>0</td>\n    </tr>\n    <tr>\n      <th>204</th>\n      <td>06f03ad6e7ea</td>\n      <td>0.175588</td>\n      <td>239</td>\n      <td>87.0</td>\n      <td>0.364017</td>\n      <td>60.0</td>\n      <td>0.251046</td>\n      <td>42.0</td>\n      <td>0.175732</td>\n      <td>38.0</td>\n      <td>...</td>\n      <td>18.0</td>\n      <td>0.075314</td>\n      <td>16.0</td>\n      <td>0.066946</td>\n      <td>0.0</td>\n      <td>0.0</td>\n      <td>0.998453</td>\n      <td>3</td>\n      <td>0</td>\n      <td>1</td>\n    </tr>\n    <tr>\n      <th>...</th>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n      <td>...</td>\n    </tr>\n    <tr>\n      <th>7274</th>\n      <td>ffe5280cd21d</td>\n      <td>0.319430</td>\n      <td>240</td>\n      <td>107.0</td>\n      <td>0.445833</td>\n      <td>97.0</td>\n      <td>0.404167</td>\n      <td>91.0</td>\n      <td>0.379167</td>\n      <td>82.0</td>\n      <td>...</td>\n      <td>54.0</td>\n      <td>0.225000</td>\n      <td>43.0</td>\n      <td>0.179167</td>\n      <td>0.0</td>\n      <td>0.0</td>\n      <td>0.995656</td>\n      <td>4</td>\n      <td>0</td>\n      <td>1</td>\n    </tr>\n    <tr>\n      <th>7275</th>\n      <td>ffe7efaccbb9</td>\n      <td>0.060635</td>\n      <td>250</td>\n      <td>35.0</td>\n      <td>0.140000</td>\n      <td>19.0</td>\n      <td>0.076000</td>\n      <td>14.0</td>\n      <td>0.056000</td>\n      <td>8.0</td>\n      <td>...</td>\n      <td>4.0</td>\n      <td>0.016000</td>\n      <td>2.0</td>\n      <td>0.008000</td>\n      <td>0.0</td>\n      <td>0.0</td>\n      <td>0.970864</td>\n      <td>3</td>\n      <td>1</td>\n      <td>0</td>\n    </tr>\n    <tr>\n      <th>7276</th>\n      <td>fff1ef450040</td>\n      <td>0.055501</td>\n      <td>272</td>\n      <td>44.0</td>\n      <td>0.161765</td>\n      <td>12.0</td>\n      <td>0.044118</td>\n      <td>7.0</td>\n      <td>0.025735</td>\n      <td>2.0</td>\n      <td>...</td>\n      <td>0.0</td>\n      <td>0.000000</td>\n      <td>0.0</td>\n      <td>0.000000</td>\n      <td>0.0</td>\n      <td>0.0</td>\n      <td>0.484924</td>\n      <td>3</td>\n      <td>1</td>\n      <td>0</td>\n    </tr>\n    <tr>\n      <th>7277</th>\n      <td>fff9536823b1</td>\n      <td>0.142846</td>\n      <td>388</td>\n      <td>119.0</td>\n      <td>0.306701</td>\n      <td>79.0</td>\n      <td>0.203608</td>\n      <td>58.0</td>\n      <td>0.149485</td>\n      <td>47.0</td>\n      <td>...</td>\n      <td>20.0</td>\n      <td>0.051546</td>\n      <td>16.0</td>\n      <td>0.041237</td>\n      <td>0.0</td>\n      <td>0.0</td>\n      <td>0.987423</td>\n      <td>0</td>\n      <td>0</td>\n      <td>1</td>\n    </tr>\n    <tr>\n      <th>7278</th>\n      <td>fffda3f22362</td>\n      <td>0.079547</td>\n      <td>169</td>\n      <td>43.0</td>\n      <td>0.254438</td>\n      <td>14.0</td>\n      <td>0.082840</td>\n      <td>8.0</td>\n      <td>0.047337</td>\n      <td>3.0</td>\n      <td>...</td>\n      <td>1.0</td>\n      <td>0.005917</td>\n      <td>0.0</td>\n      <td>0.000000</td>\n      <td>0.0</td>\n      <td>0.0</td>\n      <td>0.819511</td>\n      <td>0</td>\n      <td>1</td>\n      <td>0</td>\n    </tr>\n  </tbody>\n</table>\n<p>7079 rows × 27 columns</p>\n</div>"
      },
      "metadata": {},
-     "execution_count": 23
+     "execution_count": 35
     }
    ],
    "source": [
@@ -815,7 +801,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 24,
+   "execution_count": 101,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -824,20 +810,20 @@
     "\n",
     "features = list(set(list(train_grouped)) - set(['StudyInstanceUID', 'positive_exam_for_pe', 'negative_exam_for_pe', 'fold']))\n",
     "\n",
-    "target = 'positive_exam_for_pe'\n",
-    "# target = 'negative_exam_for_pe'"
+    "# target = 'positive_exam_for_pe'\n",
+    "target = 'negative_exam_for_pe'"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": 25,
+   "execution_count": 102,
    "metadata": {},
    "outputs": [
     {
      "output_type": "stream",
      "name": "stdout",
      "text": [
-      "['count_1', 'count_over0.3_ratio', 'count_over0.3', 'count_over0.5', 'count_over0.4_ratio', 'count_over0.6_ratio', 'count_over0.9_ratio', 'count_over0.2', 'count_over0.8', 'count_over0.2_ratio', 'count_total', 'count_over0.8_ratio', 'count_over0.7', 'count_over0.1', 'count_over0.9', 'count_1_ratio', 'count_over0.7_ratio', 'mean', 'count_over0.1_ratio', 'max', 'count_over0.5_ratio', 'count_over0.4', 'count_over0.6']\n"
+      "['count_over0.8', 'count_1', 'count_over0.1', 'count_total', 'count_over0.3', 'count_over0.2', 'count_over0.6_ratio', 'count_over0.5', 'count_over0.9', 'max', 'count_over0.7', 'count_over0.4', 'count_over0.1_ratio', 'count_over0.4_ratio', 'count_over0.3_ratio', 'count_over0.8_ratio', 'count_over0.5_ratio', 'count_over0.9_ratio', 'count_over0.6', 'count_over0.2_ratio', 'mean', 'count_1_ratio', 'count_over0.7_ratio']\n"
      ]
     }
    ],
@@ -847,7 +833,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 26,
+   "execution_count": 103,
    "metadata": {
     "tags": []
    },
@@ -860,25 +846,25 @@
       "[LightGBM] [Warning] Accuracy may be bad since you didn't set num_leaves and 2^max_depth > num_leaves\n",
       "Training until validation scores don't improve for 100 rounds\n",
       "Early stopping, best iteration is:\n",
-      "[47]\ttrain's binary_logloss: 0.249573\tval's binary_logloss: 0.314261\n",
+      "[42]\ttrain's binary_logloss: 0.285977\tval's binary_logloss: 0.356763\n",
       "[LightGBM] [Warning] Accuracy may be bad since you didn't set num_leaves and 2^max_depth > num_leaves\n",
       "Training until validation scores don't improve for 100 rounds\n",
       "Early stopping, best iteration is:\n",
-      "[35]\ttrain's binary_logloss: 0.265671\tval's binary_logloss: 0.337426\n",
+      "[35]\ttrain's binary_logloss: 0.297074\tval's binary_logloss: 0.371887\n",
       "[LightGBM] [Warning] Accuracy may be bad since you didn't set num_leaves and 2^max_depth > num_leaves\n",
       "Training until validation scores don't improve for 100 rounds\n",
       "Early stopping, best iteration is:\n",
-      "[30]\ttrain's binary_logloss: 0.271919\tval's binary_logloss: 0.338393\n",
+      "[47]\ttrain's binary_logloss: 0.278049\tval's binary_logloss: 0.359584\n",
       "[LightGBM] [Warning] Accuracy may be bad since you didn't set num_leaves and 2^max_depth > num_leaves\n",
       "Training until validation scores don't improve for 100 rounds\n",
       "Early stopping, best iteration is:\n",
-      "[33]\ttrain's binary_logloss: 0.266296\tval's binary_logloss: 0.358714\n",
+      "[35]\ttrain's binary_logloss: 0.291356\tval's binary_logloss: 0.395249\n",
       "[LightGBM] [Warning] Accuracy may be bad since you didn't set num_leaves and 2^max_depth > num_leaves\n",
       "Training until validation scores don't improve for 100 rounds\n",
       "Early stopping, best iteration is:\n",
-      "[33]\ttrain's binary_logloss: 0.266212\tval's binary_logloss: 0.33731\n",
-      "--------------------------------------------------------------------roc: 0.8933519512290025\n",
-      "----------------------------------------------------------------logloss: 0.33722104610480963\n"
+      "[32]\ttrain's binary_logloss: 0.300398\tval's binary_logloss: 0.378814\n",
+      "--------------------------------------------------------------------roc: 0.8735858070960392\n",
+      "----------------------------------------------------------------logloss: 0.3724583953134177\n"
      ]
     }
    ],
@@ -998,18 +984,18 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 27,
+   "execution_count": 97,
    "metadata": {},
    "outputs": [
     {
      "output_type": "execute_result",
      "data": {
       "text/plain": [
-       "0.33722108602523804"
+       "0.3382810950279236"
       ]
      },
      "metadata": {},
-     "execution_count": 27
+     "execution_count": 97
     }
    ],
    "source": [
@@ -1021,18 +1007,18 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 28,
+   "execution_count": 100,
    "metadata": {},
    "outputs": [
     {
      "output_type": "execute_result",
      "data": {
       "text/plain": [
-       "0.3711340129375458"
+       "0.3719339072704315"
       ]
      },
      "metadata": {},
-     "execution_count": 28
+     "execution_count": 100
     }
    ],
    "source": [
@@ -1046,9 +1032,20 @@
   },
   {
    "cell_type": "code",
-   "execution_count": 29,
+   "execution_count": 56,
    "metadata": {},
-   "outputs": [],
+   "outputs": [
+    {
+     "output_type": "execute_result",
+     "data": {
+      "text/plain": [
+       "0.3961322605609894"
+      ]
+     },
+     "metadata": {},
+     "execution_count": 56
+    }
+   ],
    "source": [
     "# # current yama's pipeline for fold0-ep1\n",
     "# def calib_p(arr, factor):  # set factor>1 to enhance positive prob\n",

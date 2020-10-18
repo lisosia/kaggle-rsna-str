@@ -9,8 +9,15 @@ from src.factory import *
 from src.utils import *
 from sklearn.metrics import log_loss
 
-FOLD = 0
-pickle_path = sys.argv[1]
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("fold", type=int)
+parser.add_argument("pickle", type=str, help="validation pickle file. given by train.py valid")
+arg = parser.parse_args()
+
+FOLD = arg.fold
+pickle_path = arg.pickle
+
 DATADIR = Path("../input/rsna-str-pulmonary-embolism-detection/")
 
 train = pd.read_csv(DATADIR / "train.csv")
@@ -35,7 +42,7 @@ def get_pred(_path):
     return raw_pred.set_index("sop")
 
 raw_pred = get_pred(pickle_path)
-print(raw_pred.head())
+# print("loaded: \n", raw_pred.head())
 
 def calib_p(arr, factor):  # set factor>1 to enhance positive prob
     return arr * factor / (arr * factor + (1-arr))
@@ -52,15 +59,16 @@ def search_best(raw_pred):
         PREDS = raw_pred.pe_present_on_image
         PREDS = calib_p(PREDS, factor)
         WEIGHT = t.loc[sops].pe_present_portion
-        loss = log_loss(LABELS, PREDS, sample_weight=WEIGHT)
+        loss = log_loss(LABELS, PREDS, sample_weight=WEIGHT, eps=1e-7)
         if loss < best:
             best = loss
             best_f = factor
             calibrated_probs = PREDS.copy()
     return best_f, best, calibrated_probs
 
-print( "best factor for pe_present", search_best(raw_pred)[:2] ) 
-print( "=========================== \n\n")
+print( "=========================== calibrate pe_present_on_image using validation data")
+print( "best factor, loss, ", search_best(raw_pred)[:2] ) 
+print( "")
 
 def search_best_pos(raw_pred):
     MEANS_IND = 0.020484822355039723
@@ -130,4 +138,4 @@ def search_best_pos(raw_pred):
         # print(f"   logloss:{log_loss(LABELS_CENT, PREDS_CENT2)}")
         # print(f"   logloss:{log_loss(LABELS_CENT, len(LABELS_CENT)*[np.mean(LABELS_CENT)] )}")
 
-print( "best factor for right/left/central", search_best_pos(raw_pred) ) 
+### print( "best factor for right/left/central", search_best_pos(raw_pred) ) 
