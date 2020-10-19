@@ -30,15 +30,10 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 
 def get_args():
     parser = argparse.ArgumentParser()
-    # parser.add_argument("--config", "-c", required=True, help="Config file path")
-    parser.add_argument("weight_path", help="weight path")
+    # parser.add_argument("weight_path", help="weight path")
     parser.add_argument("--debug", action='store_true', help="debug")
     parser.add_argument("--skip", action='store_true', help="skip for commit-time infer")
     parser.add_argument("--validation", action='store_true', help="for validation")
-    ### post process
-    parser.add_argument("--post-pe-present-calib-factor", required=True, type=float, help="pe_present_on_image calibrtoin (only used for pe_present_on_image)")
-    parser.add_argument("--post1-percentile", required=True, type=float, help="postprocess1 of pe_present->exam_pos. used percentile")
-    parser.add_argument("--post1-calib-factor", required=True, type=float, help="postprocess1 of pe_present->exam_pos. calib factor")
     return parser.parse_args()
 args = get_args()
 
@@ -101,40 +96,8 @@ def sigmoid(x):
 def inv_sigmoid(prob):
     return np.log(prob/(1-prob))
 
-def one_study_user_stacking(ids, preds_list, z_pos, lgb_models, features):
-    # 並び順の事故が怖いので一応idを使ってます
-    one_study_test = pd.DataFrame(ids, columns=['id'])
-    for pred_n, preds in enumerate(preds_list):
-        one_study_test[f'pred{pred_n}'] = preds
-    one_study_test['z_pos'] = z_pos
-    one_study_test = one_study_test.sort_values('z_pos')
-    for pred_n in range(len(preds_list)):
-        for i in range(1, 10):
-            one_study_test[f'pred{pred_n}_pre{i}'] = one_study_test[f'pred{pred_n}'].shift(i)
-            one_study_test[f'pred{pred_n}_post{i}'] = one_study_test[f'pred{pred_n}'].shift(-i)
-
-    # not used now
-    # one_study_test[f'pre_z_pos_diff1'] = one_study_test['z_pos'] - one_study_test['z_pos'].shift(1)
-
-    z_pos_max = one_study_test.z_pos.max()
-    z_pos_min = one_study_test.z_pos.min()
-    one_study_test['z_pos_norm'] = (one_study_test['z_pos'] - z_pos_min) / (z_pos_max - z_pos_min)
-
-    test_preds = np.zeros(len(z_pos))
-    ### features = list(set(list(one_study_test)) - set(['id', 'z_pos']))
-
-    if args.debug:
-        print("stacking feature:", features)
-        print("stacking input\n", one_study_test[features])
-
-    for model in lgb_models:
-        test_preds += model.predict(one_study_test[features]) / 5
-    one_study_test['stacking_pred'] = sigmoid(test_preds)
-    return one_study_test.sort_index()
-
-def one_study_user_stacking2(df, lgb_models, features):
+def one_study_user_stacking2(one_study_test, lgb_models, features):
     """df columns, SOPInstanceUID, z_pos, prediction_column1, ..."""
-    one_study_test = df.rename(columns={"fold1:exp035___pe_present_on_image":"pred0"})
     one_study_test = one_study_test.sort_values('z_pos')
     # for pred_n in range(len(preds_list)):
     for pred_n in range(1):
@@ -178,32 +141,7 @@ def grouping(df):  # for pos_exam
     grouped = grouped.reset_index().fillna(0)
     return grouped
 
-def one_study_user_stacking_posexam(ids, preds_list, z_pos, lgb_models, features):
-    # 並び順の事故が怖いので一応idを使ってます
-    one_study_test = pd.DataFrame(ids, columns=['id'])
-    # for pred_n, preds in enumerate(preds_list):
-    #     one_study_test[f'pred{pred_n}'] = preds
-    one_study_test[f'pred'] = preds_list[0]
-    
-    one_study_test['StudyInstanceUID'] = '_dummy'
-    test_grouped = grouping(one_study_test)
-
-    if args.debug:
-        print("posexam stacking feature:", features)
-        print("posexam stacking input\n", test_grouped[features])
-
-    test_preds = np.zeros(1)
-    for model in lgb_models:
-        # posexam model, predict() returns probability
-        test_preds += inv_sigmoid( model.predict(test_grouped[features]) ) / len(lgb_models)
-    
-    return sigmoid(test_preds)[0]
-
-
-def one_study_user_stacking_posexam2(df, lgb_models, features):
-    one_study_test = df.rename(columns={"fold1:exp035___pe_present_on_image" : "pred"})
-
-    ### one_study_test[f'pred'] = preds_list[0]
+def one_study_user_stacking_posexam2(one_study_test, lgb_models, features):
     one_study_test['StudyInstanceUID'] = '_dummy'
     test_grouped = grouping(one_study_test)
 
@@ -247,9 +185,7 @@ def main():
         df_sub.to_csv("submission.csv", index=False)
         return
 
-
-    # ### model 001 : image-level pred of pe_present_on_image
-    # model = ImgModel(archi="efficientnet_b0", pretrained=False).to(device)
+    # definie img-level models here
     img_models = {
         ### "fold0:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448/fold0_ep1.pt"), 8.555037588568537],
         "fold1:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448___apex___resume/fold1_ep1.pt"), 5.72045]
@@ -262,43 +198,21 @@ def main():
     lgb_models_posexam = [pickle.load(open(f'lgb_models/exp035_1018_posexam/lgb_seed0_fold{i}.pkl', 'rb')) for i in range(5)]
     features_posexam = ['count_over0.1', 'count_over0.1_ratio', 'count_over0.2', 'count_over0.2_ratio', 'count_over0.3', 'count_over0.3_ratio', 'count_over0.4', 'count_over0.4_ratio', 'count_over0.5', 'count_over0.5_ratio', 'count_over0.6', 'count_over0.6_ratio', 'count_over0.7', 'count_over0.7_ratio', 'count_over0.8', 'count_over0.8_ratio', 'count_over0.9', 'count_over0.9_ratio', 'max', 'mean', 'percentile30', 'percentile50', 'percentile70', 'percentile80', 'percentile90', 'percentile95', 'percentile99']
 
-    # result_pe = sub_2(None, model, args.weight_path)
-    ### model 010: pe_present+right,left,center
-    # model = ImgModelPE(archi="efficientnet_b0", pretrained=False).to(device)
-
-    # log(f"Model type: {model.__class__.__name__}")
-    # result_pe = sub_4(None, model, args.weight_path, valid_df=df_test if args.validation else None)
-
-
-    ### result_pe = sub_4(None, img_models, valid_df=df_test if args.validation else None)
-    # utils.save_pickle(result_pe, 'cache/xxx.pickle')
-
     result_df_dict = sub_5(None, img_models)
 
     for study in df_test.StudyInstanceUID.unique():
-        # res = result_pe[study]
-        # res_out = res["outputs"]
 
         result_df = result_df_dict[study]
 
-        # # pe_present_on_image
-        # for sop, pred in zip(res["ids"], res_out["pe_present_on_image"]):
-        #     df_sub.loc[sop, 'label'] = calib_p(pred, factor=args.post_pe_present_calib_factor)
-
-        # preds_list = []
-        # preds_list.append(
-        #         calib_p( res_out["pe_present_on_image"], factor=5.72045 )  # TODO: calib for each fold
-        #     )
-        ### stacking_pred_df = one_study_user_stacking(res["ids"], preds_list, res['z_pos'], lgb_models, features)
-        ### df_sub.loc[stacking_pred_df['id'], 'label'] = stacking_pred_df['stacking_pred'].values
-        stacking_pred_df = one_study_user_stacking2(result_df, lgb_models, features)
+        stacking_pred_df = one_study_user_stacking2(
+            result_df.copy().rename(columns={"fold1:exp035___pe_present_on_image":"pred0"}), 
+            lgb_models, features)
         df_sub.loc[stacking_pred_df['SOPInstanceUID'], 'label'] = stacking_pred_df['stacking_pred'].values
 
-        ### stacking_pred_posexam = one_study_user_stacking_posexam(res["ids"], preds_list, res['z_pos'], lgb_models_posexam, features_posexam)
-        stacking_pred_posexam = one_study_user_stacking_posexam2(result_df, lgb_models_posexam, features_posexam)
+        stacking_pred_posexam = one_study_user_stacking_posexam2(
+            result_df.copy().rename(columns={"fold1:exp035___pe_present_on_image" : "pred"}),
+            lgb_models_posexam, features_posexam)
 
-        print(stacking_pred_df)
-        print(study, "stacking_pred_posexam", stacking_pred_posexam)
 
         if DO_PE_POS_IEFER:
             # agg for right,left,center. pe_present-weighted average
@@ -312,24 +226,12 @@ def main():
             # postprocess like sqrt(p) may be good to push-up right/left/central probs for tackle half-right-slice,half-left-slice exam
 
         ### fill exam_type (negative, indeterminate, positive) ### 
-
         indeterminate_prob = _MEANS['indeterminate']  # from average
         df_sub.loc[study + '_' + 'indeterminate', 'label'] = indeterminate_prob
 
-        if True:  # posexam stacking
-            pos_exam_prob = stacking_pred_posexam
-            df_sub.loc[study + '_' + 'negative_exam_for_pe', 'label'] = (1 - pos_exam_prob) * (4911) / (4911 + 157)
-
-            print(study, "neg", df_sub.loc[study + '_' + 'negative_exam_for_pe', 'label'] )
-
-        else:  # OLD
-            pos_exam_prob = np.percentile(
-                    calib_p( res_out["pe_present_on_image"], factor=args.post1_calib_factor),
-                    q=args.post1_percentile
-                )
-            print("pos_exam_prob", pos_exam_prob, "max_pe_present_prob", np.max(res_out["pe_present_on_image"]))
-            print("stacking_pred_posexam", stacking_pred_posexam)
-            df_sub.loc[study + '_' + 'negative_exam_for_pe', 'label'] = (1 - indeterminate_prob) * (1 - pos_exam_prob)
+        # posexam stacking
+        pos_exam_prob = stacking_pred_posexam
+        df_sub.loc[study + '_' + 'negative_exam_for_pe', 'label'] = (1 - pos_exam_prob) * (4911) / (4911 + 157)
 
         ### fill right,left,central
         if DO_PE_POS_IEFER:
@@ -346,8 +248,6 @@ def main():
         # fill by pos_prob*ave_pos+(1-pos_prob)*ave_not_pos
         for k in ['rv_lv_ratio_gte_1', 'rv_lv_ratio_lt_1', 'chronic_pe', 'acute_and_chronic_pe']:
             df_sub.loc[study + '_' + k, 'label'] = pos_exam_prob * _MEANS_POS[k] + (1 - pos_exam_prob) * _MEANS_NOT_POS[k]
-
-        # import pdb; pdb.set_trace()
 
     df_sub.reset_index(inplace=True)
     df_sub.to_csv("submission.csv", index=False)
@@ -501,11 +401,7 @@ def sub_4(cfg, img_models: dict, valid_df=None):
 # forked from sub_2, img-level+study-level
 def sub_5(cfg, img_models):
     """
-    Returns: 
-    result_all["study_id"] -> {
-        "outputs" -> {"col_name1" -> np.ndarray, "col_name2 -> np.ndarray}
-        "ids -> sop_id_arr
-    }
+    Returns: result_df_dict["study_id"] -> DataFrame
     """
     result_df_dict = {}
 
@@ -526,18 +422,11 @@ def sub_5(cfg, img_models):
                         if _k == "pe_present_on_image": continue
                         outputs_all[modelname+"___"+_k].extend(torch.sigmoid(outputs[_k]).cpu().numpy())  # currently all output is binarty logit
 
-        # result_all[study_id] = {
-        #     "outputs": dict([(k, np.array(v)) for k, v in outputs_all.items()]),
-        #     "ids": np.array(sop_arr),
-        # }
-
         per_study_df = pd.DataFrame({"SOPInstanceUID": sop_arr, "z_pos": z_pos_arr, **outputs_all})
         result_df_dict[study_id] = per_study_df
 
-        # import pdb; pdb.set_trace()
         if args.debug: break
 
-    # print("per study result's keys(): ", result_all[study_id].keys())
     return result_df_dict
 
 if __name__ == "__main__":
