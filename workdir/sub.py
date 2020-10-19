@@ -132,6 +132,31 @@ def one_study_user_stacking(ids, preds_list, z_pos, lgb_models, features):
     one_study_test['stacking_pred'] = sigmoid(test_preds)
     return one_study_test.sort_index()
 
+def one_study_user_stacking2(df, lgb_models, features):
+    """df columns, SOPInstanceUID, z_pos, prediction_column1, ..."""
+    one_study_test = df.rename(columns={"fold1:exp035___pe_present_on_image":"pred0"})
+    one_study_test = one_study_test.sort_values('z_pos')
+    # for pred_n in range(len(preds_list)):
+    for pred_n in range(1):
+        for i in range(1, 10):
+            one_study_test[f'pred{pred_n}_pre{i}'] = one_study_test[f'pred{pred_n}'].shift(i)
+            one_study_test[f'pred{pred_n}_post{i}'] = one_study_test[f'pred{pred_n}'].shift(-i)
+
+    z_pos_max = one_study_test.z_pos.max()
+    z_pos_min = one_study_test.z_pos.min()
+    one_study_test['z_pos_norm'] = (one_study_test['z_pos'] - z_pos_min) / (z_pos_max - z_pos_min)
+
+    test_preds = np.zeros(len( one_study_test.z_pos ))
+
+    if args.debug:
+        print("stacking feature:", features)
+        print("stacking input\n", one_study_test[features])
+
+    for model in lgb_models:
+        test_preds += model.predict(one_study_test[features]) / len(lgb_models)
+    one_study_test['stacking_pred'] = sigmoid(test_preds)
+    return one_study_test.sort_index()
+
 
 def grouping(df):  # for pos_exam
     grouped = pd.DataFrame(df.groupby('StudyInstanceUID')['pred'].mean())
@@ -174,6 +199,30 @@ def one_study_user_stacking_posexam(ids, preds_list, z_pos, lgb_models, features
     
     return sigmoid(test_preds)[0]
 
+
+def one_study_user_stacking_posexam2(df, lgb_models, features):
+    one_study_test = df.rename(columns={"fold1:exp035___pe_present_on_image" : "pred"})
+
+    ### one_study_test[f'pred'] = preds_list[0]
+    one_study_test['StudyInstanceUID'] = '_dummy'
+    test_grouped = grouping(one_study_test)
+
+    if args.debug:
+        print("posexam stacking feature:", features)
+        print("posexam stacking input\n", test_grouped[features])
+
+    test_preds = np.zeros(1)
+    for model in lgb_models:
+        # posexam model, predict() returns probability
+        test_preds += inv_sigmoid( model.predict(test_grouped[features]) ) / len(lgb_models)
+    
+    return sigmoid(test_preds)[0]
+
+
+def get_model_eval(model, weight_path):
+    utils.load_model(weight_path, model)
+    return model.cuda().eval()
+
 def main():
     utils.set_seed(SEED)
     device = torch.device(DEVICE)
@@ -200,7 +249,11 @@ def main():
 
 
     # ### model 001 : image-level pred of pe_present_on_image
-    model = ImgModel(archi="efficientnet_b0", pretrained=False).to(device)
+    # model = ImgModel(archi="efficientnet_b0", pretrained=False).to(device)
+    img_models = {
+        ### "fold0:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448/fold0_ep1.pt"), 8.555037588568537],
+        "fold1:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448___apex___resume/fold1_ep1.pt"), 5.72045]
+    }
 
     # lgb_models = [pickle.load(open(f'lgb_models/lgb_fold{i}.pkl', 'rb')) for i in range(5)]
     lgb_models = [pickle.load(open(f'lgb_models/exp035_1018/lgb_seed0_fold{i}.pkl', 'rb')) for i in range(5)]
@@ -213,26 +266,39 @@ def main():
     ### model 010: pe_present+right,left,center
     # model = ImgModelPE(archi="efficientnet_b0", pretrained=False).to(device)
 
-    log(f"Model type: {model.__class__.__name__}")
-    result_pe = sub_4(None, model, args.weight_path, valid_df=df_test if args.validation else None)
-    utils.save_pickle(result_pe, 'cache/xxx.pickle')
+    # log(f"Model type: {model.__class__.__name__}")
+    # result_pe = sub_4(None, model, args.weight_path, valid_df=df_test if args.validation else None)
+
+
+    ### result_pe = sub_4(None, img_models, valid_df=df_test if args.validation else None)
+    # utils.save_pickle(result_pe, 'cache/xxx.pickle')
+
+    result_df_dict = sub_5(None, img_models)
 
     for study in df_test.StudyInstanceUID.unique():
-        res = result_pe[study]
-        res_out = res["outputs"]
+        # res = result_pe[study]
+        # res_out = res["outputs"]
 
-        # pe_present_on_image
-        for sop, pred in zip(res["ids"], res_out["pe_present_on_image"]):
-            df_sub.loc[sop, 'label'] = calib_p(pred, factor=args.post_pe_present_calib_factor)
+        result_df = result_df_dict[study]
 
-        preds_list = []
-        preds_list.append(
-                calib_p( res_out["pe_present_on_image"], factor=5.72045 )  # TODO: calib for each fold
-            )
-        stacking_pred_df = one_study_user_stacking(res["ids"], preds_list, res['z_pos'], lgb_models, features)
-        df_sub.loc[stacking_pred_df['id'], 'label'] = stacking_pred_df['stacking_pred'].values
+        # # pe_present_on_image
+        # for sop, pred in zip(res["ids"], res_out["pe_present_on_image"]):
+        #     df_sub.loc[sop, 'label'] = calib_p(pred, factor=args.post_pe_present_calib_factor)
 
-        stacking_pred_posexam = one_study_user_stacking_posexam(res["ids"], preds_list, res['z_pos'], lgb_models_posexam, features_posexam)
+        # preds_list = []
+        # preds_list.append(
+        #         calib_p( res_out["pe_present_on_image"], factor=5.72045 )  # TODO: calib for each fold
+        #     )
+        ### stacking_pred_df = one_study_user_stacking(res["ids"], preds_list, res['z_pos'], lgb_models, features)
+        ### df_sub.loc[stacking_pred_df['id'], 'label'] = stacking_pred_df['stacking_pred'].values
+        stacking_pred_df = one_study_user_stacking2(result_df, lgb_models, features)
+        df_sub.loc[stacking_pred_df['SOPInstanceUID'], 'label'] = stacking_pred_df['stacking_pred'].values
+
+        ### stacking_pred_posexam = one_study_user_stacking_posexam(res["ids"], preds_list, res['z_pos'], lgb_models_posexam, features_posexam)
+        stacking_pred_posexam = one_study_user_stacking_posexam2(result_df, lgb_models_posexam, features_posexam)
+
+        print(stacking_pred_df)
+        print(study, "stacking_pred_posexam", stacking_pred_posexam)
 
         if DO_PE_POS_IEFER:
             # agg for right,left,center. pe_present-weighted average
@@ -253,6 +319,9 @@ def main():
         if True:  # posexam stacking
             pos_exam_prob = stacking_pred_posexam
             df_sub.loc[study + '_' + 'negative_exam_for_pe', 'label'] = (1 - pos_exam_prob) * (4911) / (4911 + 157)
+
+            print(study, "neg", df_sub.loc[study + '_' + 'negative_exam_for_pe', 'label'] )
+
         else:  # OLD
             pos_exam_prob = np.percentile(
                     calib_p( res_out["pe_present_on_image"], factor=args.post1_calib_factor),
@@ -362,7 +431,8 @@ def sub_3(cfg, model, weight_path):
     return result_all
 
 # almost same as sub_3. performance tuning and slightly difference return structure
-def sub_4(cfg, model, weight_path, valid_df=None):
+# def sub_4(cfg, model, weight_path, valid_df=None):
+def sub_4(cfg, img_models: dict, valid_df=None):
     """
     Returns: 
     result_all["study_id"] -> {
@@ -370,8 +440,9 @@ def sub_4(cfg, model, weight_path, valid_df=None):
         "ids -> sop_id_arr
     }
     """
-    utils.load_model(weight_path, model)
-    model = model.eval()
+
+    # utils.load_model(weight_path, model)
+    # model = model.eval()
     if valid_df is None:
         dataset_sub  = RsnaDatasetTest3()
     else:
@@ -379,7 +450,7 @@ def sub_4(cfg, model, weight_path, valid_df=None):
         dataset_sub  = RsnaDatasetTest3Valid(valid_df)
 
     dataloader = DataLoader(dataset_sub, batch_size=64, shuffle=False, num_workers=2)
-    outputs_all = defaultdict(list)
+    outputs_all = {modelname: defaultdict(list) for modelname,_ in img_models.items()}
     study_ids = []
     sop_ids = []
     z_positions = []
@@ -389,10 +460,12 @@ def sub_4(cfg, model, weight_path, valid_df=None):
         imgs = imgs.cuda()
         with torch.no_grad():
             # for i in range(10): # simulate 10 models
-            for i in range(1):  # TODO do multi model inference
+            for modelname, (model,factor) in img_models.items():  # TODO do multi model inference
                 outputs = model(imgs)
-        for _k in outputs.keys():  # iter over output keys:
-            outputs_all[_k].extend(torch.sigmoid(outputs[_k]).cpu().numpy())  # currently all output is binarty logit
+
+                outputs_all[modelname]["pe_present_on_image"].extend( calib_p( torch.sigmoid(outputs["pe_present_on_image"]).cpu().numpy(), factor) )
+                for _k in ( outputs.keys() - ['pe_present_on_image']):  # iter over output keys:
+                    outputs_all[modelname][_k].extend(torch.sigmoid(outputs[_k]).cpu().numpy())  # currently all output is binarty logit
         study_ids.extend(study_arr)
         sop_ids.extend(sop_arr)
         z_positions.extend(z_pos_arr)
@@ -401,7 +474,7 @@ def sub_4(cfg, model, weight_path, valid_df=None):
             if debug_cnt > 6: break
 
     # gather results per study
-    all_output_keys = outputs_all.keys()
+    ## all_output_keys = outputs_all.keys()
     study_ids = np.array(study_ids)
     sop_ids = np.array(sop_ids)
     z_positions = np.array(z_positions)
@@ -411,15 +484,61 @@ def sub_4(cfg, model, weight_path, valid_df=None):
         sops = sop_ids[indice]
         z_pos = z_positions[indice]
         result_final[study] = {
-            "outputs": dict(
-                [(key, np.array(outputs_all[key])[indice]) for key in all_output_keys]
-            ),
+            **{
+                modelname: 
+                    dict([(key, np.array(arr)[indice]) for key, arr in output_dict.items() ]) 
+                for modelname, output_dict in outputs_all.items()
+            },
             "ids": sops,
             'z_pos': z_pos
         }
 
     print("per study result's keys(): ", result_final[study].keys())
+
+    # import pdb; pdb.set_trace();
     return result_final
+
+# forked from sub_2, img-level+study-level
+def sub_5(cfg, img_models):
+    """
+    Returns: 
+    result_all["study_id"] -> {
+        "outputs" -> {"col_name1" -> np.ndarray, "col_name2 -> np.ndarray}
+        "ids -> sop_id_arr
+    }
+    """
+    result_df_dict = {}
+
+    dataset_sub  = RsnaDatasetTest2()
+    dataloader = DataLoader(dataset_sub, batch_size=1, shuffle=False, num_workers=2, collate_fn=lambda x:x)
+    for (item) in tqdm(dataloader):
+        imgs, study_id, sop_arr, z_pos_arr = item[0]
+        _bs = 64
+        outputs_all = defaultdict(list)
+        ### img-level models
+        for i in np.arange(0, len(sop_arr), step=_bs):
+            _imgs = torch.from_numpy(imgs[i: i+_bs]).cuda()
+            with torch.no_grad():
+                for modelname, (model, pe_factor) in img_models.items():
+                    outputs = model(_imgs)
+                    outputs_all[modelname+"___"+"pe_present_on_image"].extend( calib_p( torch.sigmoid(outputs["pe_present_on_image"]).cpu().numpy(), pe_factor) )
+                    for _k in outputs.keys():  # iter over output keys:
+                        if _k == "pe_present_on_image": continue
+                        outputs_all[modelname+"___"+_k].extend(torch.sigmoid(outputs[_k]).cpu().numpy())  # currently all output is binarty logit
+
+        # result_all[study_id] = {
+        #     "outputs": dict([(k, np.array(v)) for k, v in outputs_all.items()]),
+        #     "ids": np.array(sop_arr),
+        # }
+
+        per_study_df = pd.DataFrame({"SOPInstanceUID": sop_arr, "z_pos": z_pos_arr, **outputs_all})
+        result_df_dict[study_id] = per_study_df
+
+        # import pdb; pdb.set_trace()
+        if args.debug: break
+
+    # print("per study result's keys(): ", result_all[study_id].keys())
+    return result_df_dict
 
 if __name__ == "__main__":
     main()

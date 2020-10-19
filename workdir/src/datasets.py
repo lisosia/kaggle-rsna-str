@@ -335,16 +335,16 @@ class RsnaDatasetTest2(data.Dataset):
         return len(self.studies)
     
     def _trans(self, img):
-        return ((self.transform(image=hu_to_3wins(img, MAX_LENGTH=512))["image"]).astype(np.float32) / 255.).transpose(2,0,1)
+        return ((self.transform(image=hu_to_3wins_fast_512(img))["image"]).astype(np.float32) / 255.).transpose(2,0,1)
 
     def __getitem__(self, idx: int):
         study_id = self.studies[idx]
         df = self.df_all[self.df_all.StudyInstanceUID == study_id]
-        images, sop_arr = get_sorted_hu(df)
+        images, sop_arr, z_pos_arr = get_sorted_hu(df)
         images = [self._trans(img) for img in images]
         images = np.array(images)
 
-        return images, study_id, sop_arr
+        return images, study_id, sop_arr, z_pos_arr
 
 
 class RsnaDatasetTest3(data.Dataset):
@@ -433,8 +433,8 @@ def hu_to_windows(img, WL=50, WW=350):
 def get_sorted_hu(df, folder='test'):
     d = '../input/rsna-str-pulmonary-embolism-detection/' + folder + '/' + df.StudyInstanceUID + '/' + df.SeriesInstanceUID + '/'
     dicom_files = list((d + df.SOPInstanceUID + '.dcm').unique())
-    hu_images, sop_arr = load_dicom_array(dicom_files)
-    return hu_images, sop_arr
+    hu_images, sop_arr, z_pos_arr = load_dicom_array(dicom_files)
+    return hu_images, sop_arr, z_pos_arr
 
 
 def load_dicom(dicom_file_path):
@@ -483,7 +483,7 @@ def load_dicom_array(dicom_files):
     dicoms = dicoms + B
     # sorted_dicom_files = np.asarray(dicom_files)[np.argsort(z_pos)]
     sorted_sop = np.asarray([os.path.basename(f)[:-4] for f in dicom_files])[np.argsort(z_pos)]
-    return dicoms, sorted_sop
+    return dicoms, sorted_sop, np.array(z_pos)[np.argsort(z_pos)]
 
 
 # Split CSV
