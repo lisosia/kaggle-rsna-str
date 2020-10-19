@@ -187,7 +187,7 @@ def main():
 
     # definie img-level models here
     img_models = {
-        ### "fold0:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448/fold0_ep1.pt"), 8.555037588568537],
+        "fold0:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448/fold0_ep1.pt"), 8.555037588568537],
         "fold1:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448___apex___resume/fold1_ep1.pt"), 5.72045]
     }
 
@@ -204,14 +204,23 @@ def main():
 
         result_df = result_df_dict[study]
 
-        stacking_pred_df = one_study_user_stacking2(
-            result_df.copy().rename(columns={"fold1:exp035___pe_present_on_image":"pred0"}), 
-            lgb_models, features)
-        df_sub.loc[stacking_pred_df['SOPInstanceUID'], 'label'] = stacking_pred_df['stacking_pred'].values
+        ### df_sub.loc[stacking_pred_df['SOPInstanceUID'], 'label'] = stacking_pred_df['stacking_pred'].values
+        FOLDS = [0, 1]
+        _res = np.zeros(len(result_df.z_pos))
+        for fold in FOLDS:
+            _df = stacking_pred_df = one_study_user_stacking2(
+                result_df.copy().rename(columns={f"fold{fold}:exp035___pe_present_on_image":"pred0"}), 
+                lgb_models, features)
+            _res += inv_sigmoid( _df['stacking_pred'].values ) / len(FOLDS)
+        df_sub.loc[stacking_pred_df['SOPInstanceUID'], 'label'] = sigmoid(_res)
 
-        stacking_pred_posexam = one_study_user_stacking_posexam2(
-            result_df.copy().rename(columns={"fold1:exp035___pe_present_on_image" : "pred"}),
-            lgb_models_posexam, features_posexam)
+        _res = 0.0
+        for fold in FOLDS:
+            stacking_pred_posexam = one_study_user_stacking_posexam2(
+                result_df.copy().rename(columns={f"fold{fold}:exp035___pe_present_on_image" : "pred"}),
+                lgb_models_posexam, features_posexam)
+            _res += inv_sigmoid( stacking_pred_posexam ) / len(FOLDS)
+        stacking_pred_posexam = sigmoid( _res )
 
 
         if DO_PE_POS_IEFER:
