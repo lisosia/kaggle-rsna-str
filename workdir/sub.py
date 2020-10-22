@@ -21,6 +21,8 @@ from src.utils import get_logger
 from src.criterion import ImgLoss
 from src.datasets import RsnaDatasetTest, RsnaDatasetTest2, RsnaDatasetTest3, RsnaDatasetTest3Valid
 from src.postprocess import calib_p
+
+from src import monaimodel
 # from train import run_nn
 
 # fix issue: "received 0 items of ancdata"
@@ -187,9 +189,13 @@ def main():
 
     # definie img-level models here
     img_models = {
-        "fold0:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448/fold0_ep1.pt"), 8.555037588568537],
-        "fold1:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448___apex___resume/fold1_ep1.pt"), 5.72045]
+        ### "fold0:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448/fold0_ep1.pt"), 8.555037588568537],
+        ### "fold1:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448___apex___resume/fold1_ep1.pt"), 5.72045]
     }
+    # img_models = {   # TODO BELOW IS CURRENTLY JUST A SPEED CHECK PURPOSE !!!!!!!!!!!!!!!!!!!!!!!!!!!
+    #     "fold0:exp035": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output_yuji/1021_b3_non_weighted/fold0_best.pt"), 1],
+    #     "fold1:exp035": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output_yuji/1021_b3_non_weighted/fold1_best.pt"), 1],
+    # }
 
     # lgb_models = [pickle.load(open(f'lgb_models/lgb_fold{i}.pkl', 'rb')) for i in range(5)]
     lgb_models = [pickle.load(open(f'lgb_models/exp035_1018/lgb_seed0_fold{i}.pkl', 'rb')) for i in range(5)]
@@ -415,14 +421,16 @@ def sub_5(cfg, img_models):
     result_df_dict = {}
 
     dataset_sub  = RsnaDatasetTest2()
-    dataloader = DataLoader(dataset_sub, batch_size=1, shuffle=False, num_workers=2, collate_fn=lambda x:x)
+    dataloader = DataLoader(dataset_sub, batch_size=1, shuffle=False, num_workers=2, collate_fn=lambda x:x, pin_memory=True)
     for (item) in tqdm(dataloader):
-        imgs, study_id, sop_arr, z_pos_arr = item[0]
+        imgs_numpy, study_id, sop_arr, z_pos_arr = item[0]
+        imgs = torch.from_numpy(imgs_numpy).cuda()
         _bs = 64
         outputs_all = defaultdict(list)
         ### img-level models
         for i in np.arange(0, len(sop_arr), step=_bs):
-            _imgs = torch.from_numpy(imgs[i: i+_bs]).cuda()
+            ### _imgs = torch.from_numpy(imgs[i: i+_bs]).cuda()
+            _imgs = imgs[i: i+_bs]
             with torch.no_grad():
                 for modelname, (model, pe_factor) in img_models.items():
                     outputs = model(_imgs)
@@ -430,6 +438,11 @@ def sub_5(cfg, img_models):
                     for _k in outputs.keys():  # iter over output keys:
                         if _k == "pe_present_on_image": continue
                         outputs_all[modelname+"___"+_k].extend(torch.sigmoid(outputs[_k]).cpu().numpy())  # currently all output is binarty logit
+        
+        # model prediction
+        pred_monai = monaimodel.pred_monai(imgs_numpy)
+        print(pred_monai.shape)
+
 
         per_study_df = pd.DataFrame({"SOPInstanceUID": sop_arr, "z_pos": z_pos_arr, **outputs_all})
         result_df_dict[study_id] = per_study_df
