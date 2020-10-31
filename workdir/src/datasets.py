@@ -327,7 +327,7 @@ class RsnaDatasetTest2(data.Dataset):
     """Test Time Dataset. for now, image level dataset"""
     def __init__(self, df=None):
         """df: one sop only"""
-        self.df_all = df if df  else pd.read_csv(DATADIR / "test.csv")
+        self.df_all = df if df is not None  else pd.read_csv(DATADIR / "test.csv")
         self.studies = self.df_all.StudyInstanceUID.unique()
         self.transform = get_transform_valid_v1_512()
 
@@ -437,25 +437,25 @@ def get_sorted_hu(df, folder='test'):
     return hu_images, sop_arr, z_pos_arr
 
 
-def load_dicom(dicom_file_path):
-    """return img (meda_data_dict)"""
-    d = pydicom.dcmread(dicom_file_path)
-    M = float(d.RescaleSlope)
-    B = float(d.RescaleIntercept)
-    try:
-        img = d.pixel_array
-    except:
-        print('image error ', d)
-        img = np.zeros(shape=(512,512))
-    img = img * M
-    img = img + B
+# def load_dicom(dicom_file_path):
+#     """return img (meda_data_dict)"""
+#     d = pydicom.dcmread(dicom_file_path)
+#     M = float(d.RescaleSlope)
+#     B = float(d.RescaleIntercept)
+#     try:
+#         img = d.pixel_array
+#     except:
+#         print('image error ', d)
+#         img = np.zeros(shape=(512,512))
+#     img = img * M
+#     img = img + B
 
-    z_pos = float(d.ImagePositionPatient[-1])
+#     z_pos = float(d.ImagePositionPatient[-1])
 
-    return img, z_pos
-    # return img, dict( [(e.keyword, e.value) for e in d.iterall()] )  # not used now. ignore
+#     return img, z_pos
+#     # return img, dict( [(e.keyword, e.value) for e in d.iterall()] )  # not used now. ignore
 
-
+print("========== load_dicom_array() NOT USE TRY-EXCEPT ======================")
 def load_dicom_array(dicom_files):
     """z pos sorted dicom images and files"""
     # dicom_files = glob.glob(os.path.join(series_dir, '*.dcm'))  # series_dir to dicom_files
@@ -468,11 +468,12 @@ def load_dicom_array(dicom_files):
     ### read with error check
     dicoms_arr = []
     for d in dicoms:
-        try:
-            img = d.pixel_array
-        except:
-            print('image error ', d)
-            img = np.zeros(shape=(512,512))
+        img = d.pixel_array
+        # try:
+        #     img = d.pixel_array
+        # except:
+        #     print('image error ', d)
+        #     img = np.zeros(shape=(512,512))
         dicoms_arr.append(img)
     dicoms = np.array(dicoms_arr)
     ### read without error check
