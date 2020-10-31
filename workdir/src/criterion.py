@@ -26,6 +26,19 @@ class ImgLossPE(nn.Module):
             1./2 * self.loss(input["central_pe"], target["central_pe"].float())
         return total_loss
 
+class ImgLossPE2(nn.Module):
+    """Img Level Predction Loss, change loss scale"""
+    def __init__(self):
+        super().__init__()
+        self.loss = nn.BCEWithLogitsLoss()
+    def forward(self, input, target):
+        total_loss = \
+            1./1 * self.loss(input["pe_present_on_image"], target["pe_present_on_image"].float()) + \
+            1./4 * self.loss(input["rightsided_pe"], target["rightsided_pe"].float()) + \
+            1./4 * self.loss(input["leftsided_pe"], target["leftsided_pe"].float()) + \
+            1./4 * self.loss(input["central_pe"], target["central_pe"].float())
+        return total_loss
+
 
 class ImgLossChronic(nn.Module):
     """Img Level Predction Loss"""

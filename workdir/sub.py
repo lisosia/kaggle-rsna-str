@@ -189,8 +189,8 @@ def main():
 
     # definie img-level models here
     img_models = {
-        ### "fold0:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448/fold0_ep1.pt"), 8.555037588568537],
-        ### "fold1:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448___apex___resume/fold1_ep1.pt"), 5.72045]
+        "fold0:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448/fold0_ep1.pt"), 8.555037588568537],
+        # "fold1:exp035": [get_model_eval(ImgModel(archi="efficientnet_b0", pretrained=False), "output/035_pe_present___448___apex___resume/fold1_ep1.pt"), 5.72045]
     }
     # img_models = {   # TODO BELOW IS CURRENTLY JUST A SPEED CHECK PURPOSE !!!!!!!!!!!!!!!!!!!!!!!!!!!
     #     "fold0:exp035": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output_yuji/1021_b3_non_weighted/fold0_best.pt"), 1],
@@ -204,14 +204,15 @@ def main():
     lgb_models_posexam = [pickle.load(open(f'lgb_models/exp035_1018_posexam/lgb_seed0_fold{i}.pkl', 'rb')) for i in range(5)]
     features_posexam = ['count_over0.1', 'count_over0.1_ratio', 'count_over0.2', 'count_over0.2_ratio', 'count_over0.3', 'count_over0.3_ratio', 'count_over0.4', 'count_over0.4_ratio', 'count_over0.5', 'count_over0.5_ratio', 'count_over0.6', 'count_over0.6_ratio', 'count_over0.7', 'count_over0.7_ratio', 'count_over0.8', 'count_over0.8_ratio', 'count_over0.9', 'count_over0.9_ratio', 'max', 'mean', 'percentile30', 'percentile50', 'percentile70', 'percentile80', 'percentile90', 'percentile95', 'percentile99']
 
-    result_df_dict = sub_5(None, img_models)
+    result_df_dict = sub_5(None, img_models, df_test)
 
     for study in df_test.StudyInstanceUID.unique():
 
         result_df = result_df_dict[study]
 
         ### df_sub.loc[stacking_pred_df['SOPInstanceUID'], 'label'] = stacking_pred_df['stacking_pred'].values
-        FOLDS = [0, 1]
+        # FOLDS = [0, 1]
+        FOLDS = [0]
         _res = np.zeros(len(result_df.z_pos))
         for fold in FOLDS:
             _df = stacking_pred_df = one_study_user_stacking2(
@@ -414,13 +415,14 @@ def sub_4(cfg, img_models: dict, valid_df=None):
     return result_final
 
 # forked from sub_2, img-level+study-level
-def sub_5(cfg, img_models):
+import gc
+def sub_5(cfg, img_models, valid_df):
     """
     Returns: result_df_dict["study_id"] -> DataFrame
     """
     result_df_dict = {}
 
-    dataset_sub  = RsnaDatasetTest2()
+    dataset_sub  = RsnaDatasetTest2(valid_df)
     dataloader = DataLoader(dataset_sub, batch_size=1, shuffle=False, num_workers=2, collate_fn=lambda x:x, pin_memory=True)
     for (item) in tqdm(dataloader):
         imgs_numpy, study_id, sop_arr, z_pos_arr = item[0]
@@ -440,14 +442,15 @@ def sub_5(cfg, img_models):
                         outputs_all[modelname+"___"+_k].extend(torch.sigmoid(outputs[_k]).cpu().numpy())  # currently all output is binarty logit
         
         # model prediction
-        pred_monai = monaimodel.pred_monai(imgs_numpy)
-        print(pred_monai.shape)
+        # pred_monai = monaimodel.pred_monai(imgs_numpy)
+        # print(pred_monai.shape)
 
 
         per_study_df = pd.DataFrame({"SOPInstanceUID": sop_arr, "z_pos": z_pos_arr, **outputs_all})
         result_df_dict[study_id] = per_study_df
 
         if args.debug: break
+        gc.collect()
 
     return result_df_dict
 

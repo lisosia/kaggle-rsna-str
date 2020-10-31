@@ -74,7 +74,8 @@ def rawlabel_to_label_study_level(row) -> dict:
 class RsnaDataset(data.Dataset):
     """Image Level Dataset"""
     def __init__(self, fold, phase, oversample=None, cutmix_prob=0.0,\
-        train_transform_str='get_transform_v2_512', val_transform_str='get_transform_valid_v1_512'):
+        train_transform_str='get_transform_v2_512', val_transform_str='get_transform_valid_v1_512',
+        posexam_only=False):
         """
         oversample:
             example num is... pe_present_portion(all)/pe_present_portion(pos_exam) ~= 3.3
@@ -92,10 +93,16 @@ class RsnaDataset(data.Dataset):
         df = df.merge(df_fold, on="StudyInstanceUID")  # fold row
         df_prefix = pd.read_csv(DATADIR / "sop_to_prefix.csv")
         df = df.merge(df_prefix, on="SOPInstanceUID")  # img_prefix row
+
+        if posexam_only:
+            df = df.query("indeterminate == 0 and negative_exam_for_pe == 0")
+
         if phase == "train":
             self.df = df[df.fold != fold]
             if train_transform_str == 'get_transform_v2_512':
                 self.transform = get_transform_v2_512()
+            else:
+                self.transform = globals()[train_transform_str]()                
             # self.transform = get_transform_another_crop_512()
             # self.transform = get_transform_v2_512_exclude_crop()
             print("train dataset transform", self.transform)
@@ -103,8 +110,11 @@ class RsnaDataset(data.Dataset):
             self.df = df[df.fold == fold]
             if val_transform_str == 'get_transform_valid_v1_512':
                 self.transform = get_transform_valid_v1_512()
+            else:
+                self.transform = globals()[val_transform_str]()                
             # self.transform = get_transform_valid_v1_512_exclude_crop()
             # self.transform = get_transform_valid_another_crop_512()
+            print("valid dataset transform", self.transform)
         # self.df = self.df.iloc[:600]  # debug
         if self.oversample:
             assert isinstance(self.oversample, int) and self.oversample > 1  # sample positive `oversample` times
@@ -289,6 +299,25 @@ def get_transform_v3():
         alb.CoarseDropout(min_holes=4, max_holes=7, min_height=12, min_width=12, max_height=30, max_width=30, p=0.85)
     ])
 
+def get_transform_v4_512():
+    return alb.Compose([
+        alb.RandomCrop(448, 448, p=1),
+        alb.VerticalFlip(p=0.5),
+    ])
+
+def get_transform_pos_v1_512():
+    return alb.Compose([
+        transforms.PEWinPosHEncode(size=512),
+        alb.RandomCrop(448, 448, p=1),
+        alb.HorizontalFlip(p=0.5),
+        alb.VerticalFlip(p=0.5),
+    ]) 
+def get_transform_valid_pos_v1_512():
+    return alb.Compose([
+        transforms.PEWinPosHEncode(size=512),
+        alb.CenterCrop(448, 448, p=1),
+    ]) 
+
 def get_img_jpg256_all(df):
     imgs = []
     for index, r in df.iterrows():
@@ -327,9 +356,10 @@ class RsnaDatasetTest2(data.Dataset):
     """Test Time Dataset. for now, image level dataset"""
     def __init__(self, df=None):
         """df: one sop only"""
-        self.df_all = df if df  else pd.read_csv(DATADIR / "test.csv")
+        self.df_all = df.copy() if df is not None else pd.read_csv(DATADIR / "test.csv")
         self.studies = self.df_all.StudyInstanceUID.unique()
         self.transform = get_transform_valid_v1_512()
+        self.df_all.set_index("StudyInstanceUID", inplace=True)
 
     def __len__(self):
         return len(self.studies)
@@ -339,12 +369,20 @@ class RsnaDatasetTest2(data.Dataset):
 
     def __getitem__(self, idx: int):
         study_id = self.studies[idx]
-        df = self.df_all[self.df_all.StudyInstanceUID == study_id]
+        df = self.df_all.loc[study_id].reset_index()
         images, sop_arr, z_pos_arr = get_sorted_hu(df)
         images = [self._trans(img) for img in images]
         images = np.array(images)
 
         return images, study_id, sop_arr, z_pos_arr
+    # def __getitem__(self, idx: int):
+    #     study_id = self.studies[idx]
+    #     df = self.df_all[self.df_all.StudyInstanceUID == study_id]
+    #     images, sop_arr, z_pos_arr = get_sorted_hu(df)
+    #     images = [self._trans(img) for img in images]
+    #     images = np.array(images)
+
+    #     return images, study_id, sop_arr, z_pos_arr
 
 
 class RsnaDatasetTest3(data.Dataset):
@@ -437,25 +475,25 @@ def get_sorted_hu(df, folder='test'):
     return hu_images, sop_arr, z_pos_arr
 
 
-def load_dicom(dicom_file_path):
-    """return img (meda_data_dict)"""
-    d = pydicom.dcmread(dicom_file_path)
-    M = float(d.RescaleSlope)
-    B = float(d.RescaleIntercept)
-    try:
-        img = d.pixel_array
-    except:
-        print('image error ', d)
-        img = np.zeros(shape=(512,512))
-    img = img * M
-    img = img + B
+# def load_dicom(dicom_file_path):
+#     """return img (meda_data_dict)"""
+#     d = pydicom.dcmread(dicom_file_path)
+#     M = float(d.RescaleSlope)
+#     B = float(d.RescaleIntercept)
+#     try:
+#         img = d.pixel_array
+#     except:
+#         print('image error ', d)
+#         img = np.zeros(shape=(512,512))
+#     img = img * M
+#     img = img + B
 
-    z_pos = float(d.ImagePositionPatient[-1])
+#     z_pos = float(d.ImagePositionPatient[-1])
 
-    return img, z_pos
-    # return img, dict( [(e.keyword, e.value) for e in d.iterall()] )  # not used now. ignore
+#     return img, z_pos
+#     # return img, dict( [(e.keyword, e.value) for e in d.iterall()] )  # not used now. ignore
 
-
+print("================================== DO NOT USE TRY-EXCEPT FOR load_dicom_array() ===============================")
 def load_dicom_array(dicom_files):
     """z pos sorted dicom images and files"""
     # dicom_files = glob.glob(os.path.join(series_dir, '*.dcm'))  # series_dir to dicom_files
@@ -468,11 +506,12 @@ def load_dicom_array(dicom_files):
     ### read with error check
     dicoms_arr = []
     for d in dicoms:
-        try:
-            img = d.pixel_array
-        except:
-            print('image error ', d)
-            img = np.zeros(shape=(512,512))
+        img = d.pixel_array
+        # try:
+        #     img = d.pixel_array
+        # except:
+        #     print('image error ', d)
+        #     img = np.zeros(shape=(512,512))
         dicoms_arr.append(img)
     dicoms = np.array(dicoms_arr)
     ### read without error check

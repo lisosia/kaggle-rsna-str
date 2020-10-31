@@ -70,7 +70,7 @@ def main():
     log(f"Model type: {model.__class__.__name__}")
     if config["mode"] == 'train':
         train(config, model)
-    valid(config, model)
+    ### valid(config, model)
 
 
 def valid(cfg, model):
@@ -80,6 +80,11 @@ def valid(cfg, model):
 
     path = os.path.join(output_dir, 'fold%d_best.pt' % (cfg['fold']))
     print(f'best path: {str(path)}')
+
+    if args.snapshot:
+        path = args.snapshot
+        print(f"load {path} instead")
+
     utils.load_model(str(path), model)
 
     loader_valid = factory.get_loader_valid(cfg)
@@ -133,6 +138,7 @@ def train(cfg, model):
 
         with torch.no_grad():
             val = run_nn(cfg, 'valid', model, loader_valid, criterion=criterion)
+        utils.save_pickle(val, os.path.join(output_dir, 'fold%d_ep%d.pt.valid.pkl' % (cfg["fold"], epoch) ) )
 
         detail = {
             'score': val['score'],

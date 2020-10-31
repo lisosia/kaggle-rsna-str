@@ -66,6 +66,22 @@ def cutmix(img1, img2, y1: dict, y2: dict, alpha=1.5):
     return img1, new_y
 
 
+from albumentations.core.transforms_interface import ImageOnlyTransform
+class PEWinPosHEncode(ImageOnlyTransform):
+    """replace 3rd channel by horizonal-pos encode"""
+    def __init__(self, size=512):
+        super(PEWinPosHEncode, self).__init__(always_apply=True, p=1.0)
+        # (size,size,1)  ,HWC
+        self.size = size
+        self.posimg = np.repeat(np.linspace(-1, 1, num=size).reshape(1,size, 1), repeats=size, axis=0)  # HWC
+    def apply(self, img, **params):
+        win2 = img[:,:,0:2]  # pick channel1,2
+        newimg =  np.concatenate([win2, self.posimg], axis=2)
+        # assert newimg.shape == (self.size, self.size, 3)
+        return newimg
+    def get_transform_init_args_names(self):
+        return ("size",)
+
 if __name__=="__main__":
     # test cutmix
     import numpy as np

@@ -85,6 +85,11 @@ get_transform_v2 ->   softlabel(eps,e-2), oversample=3, low-lr 2e-4, v,hhlip
     ep2 AP低下, loss上昇, したep3~切り上げ
 ep1 calib ＝＞ 0.2344 (factor=8.5550)
 
+035 FOLD1 ep2:
+raw_pred_035 fold1 ep1 (5.720451550292213, 0.2508630943769819)
+raw_pred_035 fold1 (4.374239635034443, 0.2677506508562057)   // fold0より悪い?
+
+
 036 cutmix 70%
     ep3 ap_pe_present_on_image:0.7728  logloss_pe_present_on_image:0.0891  logloss_pe_present_weighted:0.2967
 ep3 calib ＝＞ 0.23926 (factor=4.37423)
@@ -125,6 +130,26 @@ metrics:
    epo7で 'f1_qa_contrast': 0.23529411764705882が最大だが, 0のときもある
    => indeterminate, contrast, motoin の los_lossを見るべき
 
+- 448サイズで再実験, shallow, loss定義にて大きさを以前の1/4にした (他の実験とLRの大きさをおおよそそろえるため)
+0.2969 の 1/4  = 0.074 以下になってくれればよいが... ?
+
+##### chironic ,acute
+pre_chronic_pe: 0だったり0.0366だったり 
+pre_acute_and_chronic_pe: 0.06だったり, 0.12だったり 0.2162
+
+対して, pe_presentが完璧& chronic, acuteの区別が全くつかない場合は,precisionは 
+chro-> 0.13, acu-and-chro -> 0.06
+> なぜなら
+> pos_imgの場合の, chrinic, acute_anc_chronic の割合は: 
+>  'chronic_pe': 0.13242097466878175,
+> 'acute_and_chronic_pe': 0.0641930545038497,
+
+f1_chronic_pe ずっと 0.01以下
+f1_acute_and_chronic 0.01程度
+
+=> acute_and_chronic_pe はもしかしたら,まったくないよりよいかも? 実際はaggregationしないとわからないが
+
+
 #### 考察
 - indeterminate prediction
 
@@ -163,4 +188,15 @@ code structrure and trainer loop
 https://github.com/appian42/kaggle-rsna-intracranial-hemorrhage/blob/master/src/cnn/
 https://github.com/appian42/kaggle-rsna-intracranial-hemorrhage/blob/master/src/cnn/main.py
 
+###### 調査など
 
+- Coarse-Fine の構造 (ヒエラルキーをもつ)場合の分類
+
+https://i.cs.hku.hk/~yzyu/publication/HDCNN-iccv2015.pdf 図1 
+GAP後, Coarse-logitを1layer目で計算して,  そのLogit+もとのFeatureを入力としたFC層でFine-Logit計算
+
+Tailの参考に : 
+bengali 6th(maxwell) 
+https://www.kaggle.com/c/bengaliai-cv19/discussion/136011 
+https://speakerdeck.com/hoxomaxwell/kaggle-bengali-dot-ai-6-th-place-solution?slide=2
+ マルチタスク共有の3-FC と 1FC(共有なし) の和を最終的なLogitとする
