@@ -1,5 +1,0 @@
-# efnet0 finetune
-epoch: 3
-n_grad_acc: 1
-resume_from: output/001_base/fold0_ep1.pt
-
