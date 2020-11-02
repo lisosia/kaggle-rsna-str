@@ -96,15 +96,15 @@ class RsnaDataset(data.Dataset):
             self.df = df[df.fold != fold]
             if train_transform_str == 'get_transform_v2_512':
                 self.transform = get_transform_v2_512()
-            # self.transform = get_transform_another_crop_512()
-            # self.transform = get_transform_v2_512_exclude_crop()
+            if train_transform_str == 'get_transform_v4_512':
+                self.transform = get_transform_v4_512()
+
             print("train dataset transform", self.transform)
         elif phase == "valid":
             self.df = df[df.fold == fold]
             if val_transform_str == 'get_transform_valid_v1_512':
                 self.transform = get_transform_valid_v1_512()
-            # self.transform = get_transform_valid_v1_512_exclude_crop()
-            # self.transform = get_transform_valid_another_crop_512()
+
         # self.df = self.df.iloc[:600]  # debug
         if self.oversample:
             assert isinstance(self.oversample, int) and self.oversample > 1  # sample positive `oversample` times
@@ -224,10 +224,6 @@ def get_img_jpg256(r):
     return cv2.imread(str(img_path))
 
 def get_img_jpg512(r):
-    # for my data
-    # img_path = glob.glob(f"/groups1/gca50041/ariyasu/train_expt/{r['StudyInstanceUID']}/{r['SeriesInstanceUID']}/*{r['SOPInstanceUID']}.*")[0]
-    # return np.array(Image.open(img_path))
-
     folder = DATADIR / "train-jpegs-512"
     img_path = folder / (r["SOPInstanceUID"] + ".jpg")
     return cv2.imread(str(img_path))[:,:,::-1]
@@ -263,6 +259,12 @@ def get_transform_v3_512():
     return alb.Compose([
         alb.RandomCrop(448, 448, p=1),
         alb.HorizontalFlip(p=0.5),
+        alb.VerticalFlip(p=0.5),
+    ])
+
+def get_transform_v4_512():
+    return alb.Compose([
+        alb.RandomCrop(448, 448, p=1),
         alb.VerticalFlip(p=0.5),
     ])
 
@@ -352,7 +354,6 @@ class RsnaDatasetTest3(data.Dataset):
     def __init__(self):
         """df: test.csv"""
         self.df = pd.read_csv(DATADIR / "test.csv")
-        # self.dir = '/groups1/gca50041/kaggle-rsna-pe/test/'
         self.dir = '../input/rsna-str-pulmonary-embolism-detection/test/'
         self.transform = get_transform_valid_v1_512()
 
