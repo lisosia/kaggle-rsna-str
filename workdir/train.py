@@ -78,7 +78,7 @@ def valid(cfg, model):
     assert not os.path.exists(cfg["output"])
     criterion = factory.get_criterion(cfg)
 
-    path = os.path.join(output_dir, 'fold%d_best.pt' % (cfg['fold']))
+    path = os.path.join(output_dir, 'fold%d_ep0.pt' % (cfg['fold']))
     print(f'best path: {str(path)}')
     utils.load_model(str(path), model)
 

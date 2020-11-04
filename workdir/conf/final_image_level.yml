@@ -1,4 +1,4 @@
-epoch: 20
+epoch: 1
 n_grad_acc: 2
 
 # for fold0

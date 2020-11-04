@@ -22,7 +22,7 @@ from src.criterion import ImgLoss
 from src.datasets import RsnaDatasetTest, RsnaDatasetTest2, RsnaDatasetTest3, RsnaDatasetTest3Valid
 from src.postprocess import calib_p
 
-from src import monaimodel2 as monaimodel 
+from src import monaimodel2 as monaimodel
 # from train import run_nn
 
 # fix issue: "received 0 items of ancdata"
@@ -248,12 +248,12 @@ def main():
 
     # definie img-level models here
     img_models = {
-        "fold0:b3_non_weight": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output_yuji/b3_non_weight/fold0_ep0.pt"), 3.8250639579850194],
-        "fold1:b3_non_weight": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output_yuji/b3_non_weight/fold1_ep0.pt"), 8.555037588568537],
-        "fold2:b3_non_weight": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output_yuji/b3_non_weight/fold2_ep0.pt"), 4.374239635034443],
-        "fold0:position": [get_model_eval(ImgModelPE(archi="tf_efficientnet_b0", pretrained=False), "output_yuji/position_b0/fold0_best.pt"), 1],
-        "fold1:position": [get_model_eval(ImgModelPE(archi="tf_efficientnet_b0", pretrained=False), "output_yuji/position_b0/fold1_best.pt"), 1],
-        "fold2:position": [get_model_eval(ImgModelPE(archi="tf_efficientnet_b0", pretrained=False), "output_yuji/position_b0/fold2_best.pt"), 1],
+        "fold0:b3_non_weight": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output/b3_non_weight/fold0_ep0.pt"), 3.8250639579850194],
+        "fold1:b3_non_weight": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output/b3_non_weight/fold1_ep0.pt"), 8.555037588568537],
+        "fold2:b3_non_weight": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output/b3_non_weight/fold2_ep0.pt"), 4.374239635034443],
+        "fold0:position": [get_model_eval(ImgModelPE(archi="tf_efficientnet_b0", pretrained=False), "output/position/fold0_ep0.pt"), 1],
+        "fold1:position": [get_model_eval(ImgModelPE(archi="tf_efficientnet_b0", pretrained=False), "output/position/fold1_ep0.pt"), 1],
+        "fold2:position": [get_model_eval(ImgModelPE(archi="tf_efficientnet_b0", pretrained=False), "output/position/fold2_ep0.pt"), 1],
     }
 
     # lgb_models = [pickle.load(open(f'lgb_models/lgb_fold{i}.pkl', 'rb')) for i in range(5)]
