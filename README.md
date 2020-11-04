@@ -64,14 +64,14 @@ python3 train.py train conf/final_position.yml -o output/position/oof_fold3.pkl 
 python3 train.py train conf/final_position.yml -o output/position/oof_fold4.pkl --fold 4
 ```
 
-<yama>
+[yama]
 
 ```
 スタッキングモデルの学習について、ここにお願いします。
 ```
 
 ## IF YOU USE OUR TRAINED MODEL
-<yama>
+[yama]
 モデルのセット等、ここに指示を書いていただければ。
 解凍したのち、modelsというフォルダからxxxで始まるファイルをoutput_yujiへ、yyyで始まるファイルを5foldmonaiへ...等お願いします。下にコマンド書いていただければ。
 
