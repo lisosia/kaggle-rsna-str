@@ -17,9 +17,10 @@ python3 train.py train conf/final_position.yml -o output/position/oof_fold4.pkl 
 
 ## 2nd stage train
 
+Use below notebooks. Note that you need to edit some lines. Check README.md for detail.
 ```
-<yama>
-指示をお願いします。
+notebook/stacking_yuji_b3.ipynb
+notebook/stacking_yuji_b3_monai_acute_position.ipynb
 ```
 
 ## submit
