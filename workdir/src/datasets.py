@@ -14,7 +14,12 @@ from PIL import Image
 from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-DATADIR = Path("../input/rsna-str-pulmonary-embolism-detection/")
+import json
+setting_json = open('SETTINGS.json', 'r')
+setting_json = json.load(setting_json)
+
+DATADIR = Path(setting_json["INPUT"])
+TRAIN_IMAGES = Path(setting_json["TRAIN_IMAGES"])
 
 _EXAM_TYPES = ["negative", "indeterminate", "positive"]
 def _encode_exam_type(row): return _EXAM_TYPES.index(row["exam_type"])
@@ -224,7 +229,7 @@ def get_img_jpg256(r):
     return cv2.imread(str(img_path))
 
 def get_img_jpg512(r):
-    folder = DATADIR / "train-jpegs-512"
+    folder = TRAIN_IMAGES
     img_path = folder / (r["SOPInstanceUID"] + ".jpg")
     return cv2.imread(str(img_path))[:,:,::-1]
 
@@ -354,7 +359,7 @@ class RsnaDatasetTest3(data.Dataset):
     def __init__(self):
         """df: test.csv"""
         self.df = pd.read_csv(DATADIR / "test.csv")
-        self.dir = '../input/rsna-str-pulmonary-embolism-detection/test/'
+        self.dir = f'{setting_json["INPUT"]}/test/'
         self.transform = get_transform_valid_v1_512()
 
     def __len__(self):
@@ -432,7 +437,7 @@ def hu_to_windows(img, WL=50, WW=350):
     return X
 
 def get_sorted_hu(df, folder='test'):
-    d = '../input/rsna-str-pulmonary-embolism-detection/' + folder + '/' + df.StudyInstanceUID + '/' + df.SeriesInstanceUID + '/'
+    d = setting_json["INPUT"] + '/' + folder + '/' + df.StudyInstanceUID + '/' + df.SeriesInstanceUID + '/'
     dicom_files = list((d + df.SOPInstanceUID + '.dcm').unique())
     hu_images, sop_arr, z_pos_arr = load_dicom_array(dicom_files)
     return hu_images, sop_arr, z_pos_arr

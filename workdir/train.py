@@ -41,7 +41,11 @@ EXP_ID = os.path.splitext(os.path.basename(args.config))[0]
 SEED = 42 + 1
 DEVICE = "cuda"
 
-output_dir = Path("./output") / EXP_ID
+import json
+setting_json = open('SETTINGS.json', 'r')
+setting_json = json.load(setting_json)
+
+output_dir = Path(setting_json["OUTPUT"]) / EXP_ID
 output_dir.mkdir(exist_ok=True, parents=True)
 _logger = get_logger(output_dir / f"fold{args.fold}_output.log")
 def log(msg): _logger.info(msg)

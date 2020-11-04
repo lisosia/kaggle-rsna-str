@@ -1,0 +1,1 @@
+{"OUTPUT": "./output", "INPUT": "../input/rsna-str-pulmonary-embolism-detection", "TRAIN_IMAGES":"../input/rsna-str-pulmonary-embolism-detection/train-jpegs-512", "EXTERNAL": "../input/external_table_data"}

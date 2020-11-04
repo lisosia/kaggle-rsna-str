@@ -45,7 +45,12 @@ DEVICE = "cuda"
 def log(msg): print(msg)
 def log_w(msg): print(msg)
 
-DATADIR = Path("../input/rsna-str-pulmonary-embolism-detection/")
+
+import json
+setting_json = open('SETTINGS.json', 'r')
+setting_json = json.load(setting_json)
+
+DATADIR = Path(setting_json["INPUT"])
 
 _MEANS = {
     'pe_present_on_image': 0.053915069524414806,
@@ -228,15 +233,15 @@ def main():
         return
 
 
-    if args.mode == 'private':
-        public_exam_ids_df = pd.read_pickle('../input/publicexam/StudyInstanceUID.pkl')
-        df_test = df_test[~df_test.StudyInstanceUID.isin(public_exam_ids_df.StudyInstanceUID.values)]
-    elif args.mode == 'public':
-        public_exam_ids_df = pd.read_pickle('../input/publicexam/StudyInstanceUID.pkl')
-        df_test = df_test[df_test.StudyInstanceUID.isin(public_exam_ids_df.StudyInstanceUID.values)]
+    # if args.mode == 'private':
+    #     public_exam_ids_df = pd.read_pickle('../input/publicexam/StudyInstanceUID.pkl')
+    #     df_test = df_test[~df_test.StudyInstanceUID.isin(public_exam_ids_df.StudyInstanceUID.values)]
+    # elif args.mode == 'public':
+    #     public_exam_ids_df = pd.read_pickle('../input/publicexam/StudyInstanceUID.pkl')
+    #     df_test = df_test[df_test.StudyInstanceUID.isin(public_exam_ids_df.StudyInstanceUID.values)]
 
 
-    print( "=> len(df_test)", len(df_test))
+    # print( "=> len(df_test)", len(df_test))
 
 
     # MONAI, must to start from 0 and increment by 1 [fold0,fold1, ...]
