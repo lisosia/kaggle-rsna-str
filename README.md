@@ -49,7 +49,7 @@ SETTINGS.json is in kaggle-rsna-str/workdir folder.
 ## MODEL BUILD:
 First, create 1st stage models and oof. oof is used for training 2nd stage lightgbm models.  
 
-1st stage
+#### 1st stage
 
 ```
 cd workdir
@@ -66,26 +66,38 @@ python3 train.py train conf/final_position.yml -o output/position/oof_fold3.pkl 
 python3 train.py train conf/final_position.yml -o output/position/oof_fold4.pkl --fold 4
 ```
 
-[yama]  
-2nd stage
+#### 2nd stage
 
+a) calibration for `final_image_level` model  
+
+use below command to get calibration factor `f` for each model
 ```
-スタッキングモデルの学習について、ここにお願いします。
+python3 src/oof_opt.py <FOLD_NUM> <OOF PICKLE FILE>
 ```
+
+b) stacking for `pe_present_on_image` using `pe_present_on_image` model
+
+Edit pickle path and calibration factor (`In [6]` cell).  
+Then run `/notebook/stacking_yuji_b3.ipynb`.  
+Move created models in `lgbs/lgb_seed0_fold{i}.pkl` to `lgb_models/exp035_1018/`
+
+c) stacking for other targets using `pe_preesnt_on_image` model, `position` model, monai model
+
+Edit pickle path, calibration factor and oof csv file path (`In [6]`, `In [138]`, `In [136]`cell). Also Edit oof-file loading function if needed.  
+Then Run `notebook/stacking_yuji_b3_monai_acute_position.ipynb`.  
+Move created models in `lgbs/{TargetName}_monai_lgb_seed0_fold{i}.pkl` to `lgb_models/b3_exams_monai_position_1026/`.
 
 ## IF YOU USE OUR TRAINED MODEL
 
-[yama]  
-モデルのセット等、ここに指示を書いていただければ。  
-解凍したのち、modelsというフォルダからxxxで始まるファイルをoutput_yujiへ、yyyで始まるファイルを5foldmonaiへ...等お願いします。下にコマンド書いていただければ。
-
 ```
 cd workdir
-mkdir output_yuji
-mkdir -p output_jan/5foldmonai
-mv xxx* output_yuji/
-mv yyy* output_jan/5foldmonai/
+mkdir -p output_yuji output_jan
+# unzip model to /datapath/ then:
+mv /datapath/models/b3_non_weight output_yuji/
+mv /datapath/models/position output_yuji/
+mv /datapath/models/5foldmonai output_jan/
 ```
+Note that stacking models are already commited to `workdir/lgb_models/exp035_1018/`, `workdir/lgb_models/b3_exams_monai_position_1026/`.
 
 ## SUBMIT:
 
