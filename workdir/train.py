@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import copy
 from collections import defaultdict
 from pathlib import Path
 import os
@@ -25,7 +26,7 @@ import src.factory as factory
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=['train', 'valid'], help="train valid")
+    parser.add_argument("mode", choices=['train', 'valid', 'test'], help="train valid")
     parser.add_argument("config", help="Config file path")
     parser.add_argument("--fold", type=int, default=0, help="fold")
     parser.add_argument("--apex", action='store_true', default=False, help="apex")
@@ -74,10 +75,17 @@ def main():
     log(f"Model type: {model.__class__.__name__}")
     if config["mode"] == 'train':
         train(config, model)
-    valid(config, model)
+        valid(config, model)
+    elif config["mode"] == 'valid':
+        valid(config, model)
+    elif config["mode"] == 'test':
+        valid(config, model, all_exam=True)
 
 
-def valid(cfg, model):
+def valid(_cfg, model, all_exam=False):
+    cfg = copy.deepcopy(_cfg)
+    if all_exam:
+        cfg["dataset"]["param"]["posexam_only"] = False  # validation for all slices
     assert cfg["output"]
     assert not os.path.exists(cfg["output"])
     criterion = factory.get_criterion(cfg)

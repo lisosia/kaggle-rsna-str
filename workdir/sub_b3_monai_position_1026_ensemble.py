@@ -246,19 +246,19 @@ def main():
 
     # MONAI, must to start from 0 and increment by 1 [fold0,fold1, ...]
     monai_models = [
-        monaimodel.MonaiModelTest("output_jan/5foldmonai/monai3d_160_3ch_1e-5_20ep_aug_6targets_0_0.26139065623283386(2).pth"),  # fold0
-        monaimodel.MonaiModelTest("output_jan/5foldmonai/monai3d_160_3ch_1e-5_20ep_aug_6targets_1_0.2838641107082367(1).pth"),   # fold1
-        monaimodel.MonaiModelTest("output_jan/5foldmonai/monai3d_160_3ch_1e-5_20ep_aug_6targets_2_0.2847862243652344(1).pth"),   # fold2
+        monaimodel.MonaiModelTest("output_jan/fold0.pth"),  # fold0
+        monaimodel.MonaiModelTest("output_jan/fold1.pth"),  # fold1
+        monaimodel.MonaiModelTest("output_jan/fold2.pth"),  # fold2
     ]
 
     # definie img-level models here
     img_models = {
-        "fold0:b3_non_weight": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output_yuji/b3_non_weight/fold0_ep0.pt"), 3.8250639579850194],
-        "fold1:b3_non_weight": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output_yuji/b3_non_weight/fold1_ep0.pt"), 8.555037588568537],
-        "fold2:b3_non_weight": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output_yuji/b3_non_weight/fold2_ep0.pt"), 4.374239635034443],
-        "fold0:position": [get_model_eval(ImgModelPE(archi="tf_efficientnet_b0", pretrained=False), "output_yuji/position/fold0_ep0.pt"), 1],
-        "fold1:position": [get_model_eval(ImgModelPE(archi="tf_efficientnet_b0", pretrained=False), "output_yuji/position/fold1_ep0.pt"), 1],
-        "fold2:position": [get_model_eval(ImgModelPE(archi="tf_efficientnet_b0", pretrained=False), "output_yuji/position/fold2_ep0.pt"), 1],
+        "fold0:b3_non_weight": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output/final_image_level/fold0_ep0.pt"), 3.8250639579850194],
+        "fold1:b3_non_weight": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output/final_image_level/fold1_ep0.pt"), 8.555037588568537],
+        "fold2:b3_non_weight": [get_model_eval(ImgModel(archi="tf_efficientnet_b3_ns", pretrained=False), "output/final_image_level/fold2_ep0.pt"), 4.374239635034443],
+        "fold0:position": [get_model_eval(ImgModelPE(archi="tf_efficientnet_b0", pretrained=False), "output/final_position/fold0_ep0.pt"), 1],
+        "fold1:position": [get_model_eval(ImgModelPE(archi="tf_efficientnet_b0", pretrained=False), "output/final_position/fold1_ep0.pt"), 1],
+        "fold2:position": [get_model_eval(ImgModelPE(archi="tf_efficientnet_b0", pretrained=False), "output/final_position/fold2_ep0.pt"), 1],
     }
 
     # lgb_models = [pickle.load(open(f'lgb_models/lgb_fold{i}.pkl', 'rb')) for i in range(5)]

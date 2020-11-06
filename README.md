@@ -51,19 +51,28 @@ First, create 1st stage models and oof. oof is used for training 2nd stage light
 
 #### 1st stage
 
+2D-CNN
 ```
 cd workdir
-python3 train.py train conf/final_image_level.yml -o output/b3/oof_fold0.pkl --fold 0
-python3 train.py train conf/final_image_level.yml -o output/b3/oof_fold1.pkl --fold 1
-python3 train.py train conf/final_image_level.yml -o output/b3/oof_fold2.pkl --fold 2
-python3 train.py train conf/final_image_level.yml -o output/b3/oof_fold3.pkl --fold 3
-python3 train.py train conf/final_image_level.yml -o output/b3/oof_fold4.pkl --fold 4
+# train 1
+for fold in $(seq 0 5) ; do
+    python3 train.py train conf/final_image_level.yml -o output/final_image_level/oof_fold${fold}.pkl --fold ${fold}
+done
+# calculate calibration value
+for fold in $(seq 0 5) ; do
+    python3 src/oof_opt.py ${fold} output/final_image_level/oof_fold${fold}.pkl
+done
 
-python3 train.py train conf/final_position.yml -o output/position/oof_fold0.pkl --fold 0
-python3 train.py train conf/final_position.yml -o output/position/oof_fold1.pkl --fold 1
-python3 train.py train conf/final_position.yml -o output/position/oof_fold2.pkl --fold 2
-python3 train.py train conf/final_position.yml -o output/position/oof_fold3.pkl --fold 3
-python3 train.py train conf/final_position.yml -o output/position/oof_fold4.pkl --fold 4
+# train 2
+for fold in $(seq 0 5) ; do
+    python3 train.py train conf/final_position.yml -o output/final_position/oof_fold${fold}_pos.pkl --fold ${fold}
+    python3 train.py  test conf/final_position.yml -o output/final_position/oof_fold${fold}.pkl     --fold ${fold}
+done
+```
+
+3D-CNN
+```
+train3DMonai.ipynb
 ```
 
 #### 2nd stage
@@ -77,13 +86,13 @@ python3 src/oof_opt.py <FOLD_NUM> <OOF PICKLE FILE>
 
 b) stacking for `pe_present_on_image` using `pe_present_on_image` model
 
-Edit pickle path and calibration factor (`In [6]` cell).  
+Edit calibration factor value. Also edit pickle loading codes if needed.  
 Then run `/notebook/stacking_yuji_b3.ipynb`.  
 Move created models in `lgbs/lgb_seed0_fold{i}.pkl` to `lgb_models/exp035_1018/`
 
 c) stacking for other targets using `pe_preesnt_on_image` model, `position` model, monai model
 
-Edit pickle path, calibration factor and oof csv file path (`In [6]`, `In [138]`, `In [136]`cell). Also Edit oof-file loading function if needed.  
+Edit calibration factor value. Also edit pickle path ,oof csv file path and pickle loading codes if needed.  
 Then Run `notebook/stacking_yuji_b3_monai_acute_position.ipynb`.  
 Move created models in `lgbs/{TargetName}_monai_lgb_seed0_fold{i}.pkl` to `lgb_models/b3_exams_monai_position_1026/`.
 
@@ -91,11 +100,11 @@ Move created models in `lgbs/{TargetName}_monai_lgb_seed0_fold{i}.pkl` to `lgb_m
 
 ```
 cd workdir
-mkdir -p output_yuji output_jan
-# unzip model to /datapath/ then:
-mv /datapath/models/b3_non_weight output_yuji/
-mv /datapath/models/position output_yuji/
-mv /datapath/models/5foldmonai output_jan/
+mkdir -p output
+# unzip archive to /datapath/ then:
+mv /datapath/models/b3_non_weight output/
+mv /datapath/models/position output/
+mv /datapath/models/output_jan ./
 ```
 Note that stacking models are already commited to `workdir/lgb_models/exp035_1018/`, `workdir/lgb_models/b3_exams_monai_position_1026/`.
 

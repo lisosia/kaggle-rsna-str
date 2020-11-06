@@ -79,7 +79,8 @@ def rawlabel_to_label_study_level(row) -> dict:
 class RsnaDataset(data.Dataset):
     """Image Level Dataset"""
     def __init__(self, fold, phase, oversample=None, cutmix_prob=0.0,\
-        train_transform_str='get_transform_v2_512', val_transform_str='get_transform_valid_v1_512'):
+        train_transform_str='get_transform_v2_512', val_transform_str='get_transform_valid_v1_512',
+        posexam_only=False):
         """
         oversample:
             example num is... pe_present_portion(all)/pe_present_portion(pos_exam) ~= 3.3
@@ -97,6 +98,10 @@ class RsnaDataset(data.Dataset):
         df = df.merge(df_fold, on="StudyInstanceUID")  # fold row
         df_prefix = pd.read_csv(DATADIR / "sop_to_prefix.csv")
         df = df.merge(df_prefix, on="SOPInstanceUID")  # img_prefix row
+
+        if posexam_only:
+            df = df.query("indeterminate == 0 and negative_exam_for_pe == 0")
+
         if phase == "train":
             self.df = df[df.fold != fold]
             if train_transform_str == 'get_transform_v2_512':

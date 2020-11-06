@@ -1,23 +1,32 @@
 ## 1st stage train
 
+train 2D-CNN
 ```
 cd workdir
-python3 train.py train conf/final_image_level.yml -o output/b3/oof_fold0.pkl --fold 0
-python3 train.py train conf/final_image_level.yml -o output/b3/oof_fold1.pkl --fold 1
-python3 train.py train conf/final_image_level.yml -o output/b3/oof_fold2.pkl --fold 2
-python3 train.py train conf/final_image_level.yml -o output/b3/oof_fold3.pkl --fold 3
-python3 train.py train conf/final_image_level.yml -o output/b3/oof_fold4.pkl --fold 4
+# train 1
+for fold in $(seq 0 5) ; do
+    python3 train.py train conf/final_image_level.yml -o output/final_image_level/oof_fold${fold}.pkl --fold ${fold}
+done
+# calculate calibration value
+for fold in $(seq 0 5) ; do
+    python3 src/oof_opt.py ${fold} output/final_image_level/oof_fold${fold}.pkl
+done
 
-python3 train.py train conf/final_position.yml -o output/position/oof_fold0.pkl --fold 0
-python3 train.py train conf/final_position.yml -o output/position/oof_fold1.pkl --fold 1
-python3 train.py train conf/final_position.yml -o output/position/oof_fold2.pkl --fold 2
-python3 train.py train conf/final_position.yml -o output/position/oof_fold3.pkl --fold 3
-python3 train.py train conf/final_position.yml -o output/position/oof_fold4.pkl --fold 4
+# train 2
+for fold in $(seq 0 5) ; do
+    python3 train.py train conf/final_position.yml -o output/final_position/oof_fold${fold}_pos.pkl --fold ${fold}
+    python3 train.py  test conf/final_position.yml -o output/final_position/oof_fold${fold}.pkl     --fold ${fold}
+done
+```
+
+train 3D-CNN (MONAI).
+```
+train3DMonai.ipynb
 ```
 
 ## 2nd stage train
 
-Use below notebooks. Note that you need to edit some lines. Check README.md for detail.
+Use below notebooks. Note that you need to edit some lines because refactored codes are not fully tested. Check README.md for detail.
 ```
 notebook/stacking_yuji_b3.ipynb
 notebook/stacking_yuji_b3_monai_acute_position.ipynb
